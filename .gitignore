@@ -34,6 +34,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+# .env.production holds only NEXT_PUBLIC_* (public, browser-exposed) values, so it
+# is safe to commit and lets git-based deploys pick up the backend URL automatically.
+!.env.production
 
 # vercel
 .vercel
