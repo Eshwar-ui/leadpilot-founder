@@ -6,13 +6,46 @@ import { Eye, EyeOff } from "lucide-react";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Button } from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
+import { authApi, ApiError } from "@/lib/api";
+import { saveSession } from "@/lib/auth";
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
 
   const strength = Math.min(3, Math.floor(password.length / 3));
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (password !== confirmPassword) {
+      setError("Passwords don't match");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const session = await authApi.register({
+        org_name: `${name || "New"}'s Organization`,
+        name,
+        email,
+        password,
+      });
+      saveSession(session);
+      router.push("/onboarding");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <AuthShell
@@ -23,19 +56,22 @@ export default function RegisterPage() {
       <h2 className="text-3xl font-bold text-slate-900">Create your account</h2>
       <p className="mt-2 text-sm text-slate-500">Start your free trial — no credit card required</p>
 
-      <form
-        className="mt-8 space-y-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          router.push("/onboarding");
-        }}
-      >
+      {error && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
         <div>
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">
             Full Name
           </label>
           <input
             type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
             placeholder="Alex Rivera"
             className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
           />
@@ -47,6 +83,9 @@ export default function RegisterPage() {
           </label>
           <input
             type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
             placeholder="alex@company.com"
             className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
           />
@@ -95,6 +134,9 @@ export default function RegisterPage() {
           </label>
           <input
             type={showPassword ? "text" : "password"}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
             placeholder="••••••••"
             className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
           />
@@ -114,8 +156,8 @@ export default function RegisterPage() {
           </span>
         </label>
 
-        <Button type="submit" className="w-full">
-          Create Account
+        <Button type="submit" className="w-full" disabled={submitting}>
+          {submitting ? "Creating account…" : "Create Account"}
         </Button>
 
         <p className="text-center text-sm text-slate-400">You&apos;ll set up your organisation next →</p>

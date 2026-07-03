@@ -6,6 +6,8 @@ import { Check, Upload } from "lucide-react";
 import { StepIndicator } from "@/components/onboarding/StepIndicator";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+import { authApi } from "@/lib/api";
+import { getToken, updateStoredOrgName } from "@/lib/auth";
 
 const STEP_META = [
   {
@@ -47,8 +49,26 @@ export default function OnboardingPage() {
   const [languages, setLanguages] = useState<string[]>(["English", "Hindi"]);
   const [services] = useState<string[]>(["Premium Villas", "Commercial Plots"]);
   const [brandVoice, setBrandVoice] = useState("Authoritative");
+  const [launching, setLaunching] = useState(false);
 
   const meta = STEP_META[step - 1];
+
+  async function handleLaunch() {
+    setLaunching(true);
+    const token = getToken();
+    try {
+      if (token) {
+        await authApi.renameOrg(token, orgName);
+        updateStoredOrgName(orgName);
+      }
+    } catch {
+      // Org profile fields beyond name (industry, brand voice, etc.) aren't persisted
+      // yet — this call is best-effort so a backend hiccup never blocks onboarding.
+    } finally {
+      setLaunching(false);
+      router.push("/dashboard");
+    }
+  }
 
   function toggleLanguage(lang: string) {
     setLanguages((prev) => (prev.includes(lang) ? prev.filter((l) => l !== lang) : [...prev, lang]));
@@ -261,8 +281,8 @@ export default function OnboardingPage() {
                 </div>
               </div>
 
-              <Button className="mt-6 w-full" onClick={() => router.push("/dashboard")}>
-                Create Organisation
+              <Button className="mt-6 w-full" onClick={handleLaunch} disabled={launching}>
+                {launching ? "Launching…" : "Create Organisation"}
               </Button>
             </div>
           )}
