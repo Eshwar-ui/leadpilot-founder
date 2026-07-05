@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Filter, Target, BarChart3, CheckCircle2, Phone, Megaphone, Activity, Calendar, Download } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
@@ -7,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { RevenueChart } from "@/components/charts/RevenueChart";
 import { GoalGauge } from "@/components/charts/GoalGauge";
 import { liveActivity } from "@/lib/mock-data";
+import { ApiError, dashboardApi, type DashboardSnapshot } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const activityToneDot: Record<string, string> = {
@@ -17,6 +21,22 @@ const activityToneDot: Record<string, string> = {
 };
 
 export default function DailySnapshotPage() {
+  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  function load() {
+    setLoading(true);
+    setError(null);
+    dashboardApi
+      .snapshot()
+      .then(setSnapshot)
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load dashboard snapshot"))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(load, []);
+
   return (
     <div className="pb-10">
       <PageHeader
@@ -42,12 +62,30 @@ export default function DailySnapshotPage() {
         />
       </div>
 
+      {error && (
+        <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error} —{" "}
+          <button className="font-semibold underline" onClick={load}>
+            Retry
+          </button>
+        </div>
+      )}
+
       <div className="mt-6 grid grid-cols-2 gap-4 px-4 sm:px-6 lg:px-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-        <StatCard label="Total Leads" value="2,840" suffix="MTD" delta="+12 vs last mo" icon={Filter} />
-        <StatCard label="Positive Leads" value="1,190" delta="+8 vs last mo" icon={Target} />
-        <StatCard label="Conversion Rate" value="41.9%" delta="+2.1 vs last mo" icon={BarChart3} />
-        <StatCard label="Closed Deals" value="284" delta="+34 vs last mo" icon={CheckCircle2} />
-        <StatCard label="Calls Today" value="1,240" icon={Phone} />
+        <StatCard
+          label="Total Leads"
+          value={loading ? "…" : String(snapshot?.total_leads ?? 0)}
+          suffix="MTD"
+          icon={Filter}
+        />
+        <StatCard label="Hot Leads" value={loading ? "…" : String(snapshot?.hot_leads ?? 0)} icon={Target} />
+        <StatCard
+          label="Conversion Rate"
+          value={loading ? "…" : `${snapshot?.conversion_rate_pct ?? 0}%`}
+          icon={BarChart3}
+        />
+        <StatCard label="Leads Today" value={loading ? "…" : String(snapshot?.leads_today ?? 0)} icon={CheckCircle2} />
+        <StatCard label="Calls Today" value={loading ? "…" : String(snapshot?.calls_today ?? 0)} icon={Phone} />
         <StatCard label="Active Campaigns" value="7" icon={Megaphone} />
         <StatCard label="Team Quality" value="89" suffix="/100" delta="+4 vs last mo" icon={Activity} />
       </div>

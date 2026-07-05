@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { Check, Upload } from "lucide-react";
 import { StepIndicator } from "@/components/onboarding/StepIndicator";
 import { Button } from "@/components/ui/Button";
+import { TagInput } from "@/components/ui/TagInput";
 import { cn } from "@/lib/utils";
-import { authApi } from "@/lib/api";
-import { getToken, updateStoredOrgName } from "@/lib/auth";
+import { ApiError, orgApi } from "@/lib/api";
 
 const STEP_META = [
   {
@@ -43,30 +43,53 @@ const VOICE_OPTIONS = [
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
+
+  // Step 1
   const [orgName, setOrgName] = useState("TechCorp India");
   const [industry, setIndustry] = useState("Real Estate");
   const [website, setWebsite] = useState("techcorp.in");
   const [languages, setLanguages] = useState<string[]>(["English", "Hindi"]);
-  const [services] = useState<string[]>(["Premium Villas", "Commercial Plots"]);
+
+  // Step 2 — this is the Organisation Knowledge Base every AI feature (scoring
+  // relevance, follow-up tone, script generation) reads from, so every field
+  // here needs to actually persist, not just render.
+  const [services, setServices] = useState<string[]>(["Premium Villas", "Commercial Plots"]);
+  const [pricingMin, setPricingMin] = useState("5000000");
+  const [pricingMax, setPricingMax] = useState("50000000");
+  const [targetAudience, setTargetAudience] = useState("");
+  const [usps, setUsps] = useState<string[]>([]);
+
+  // Step 3
   const [brandVoice, setBrandVoice] = useState("Authoritative");
+  const [competitors, setCompetitors] = useState<string[]>([]);
+
   const [launching, setLaunching] = useState(false);
+  const [launchError, setLaunchError] = useState<string | null>(null);
 
   const meta = STEP_META[step - 1];
 
   async function handleLaunch() {
     setLaunching(true);
-    const token = getToken();
+    setLaunchError(null);
     try {
-      if (token) {
-        await authApi.renameOrg(token, orgName);
-        updateStoredOrgName(orgName);
-      }
-    } catch {
-      // Org profile fields beyond name (industry, brand voice, etc.) aren't persisted
-      // yet — this call is best-effort so a backend hiccup never blocks onboarding.
+      await orgApi.update({
+        name: orgName,
+        industry,
+        website_url: website,
+        services,
+        pricing_min: pricingMin ? Number(pricingMin) : undefined,
+        pricing_max: pricingMax ? Number(pricingMax) : undefined,
+        target_audience: targetAudience || undefined,
+        competitors,
+        brand_voice: brandVoice,
+        languages,
+        usps,
+      });
+      router.push("/dashboard");
+    } catch (e) {
+      setLaunchError(e instanceof ApiError ? e.message : "Couldn't save your organisation profile. Please try again.");
     } finally {
       setLaunching(false);
-      router.push("/dashboard");
     }
   }
 
@@ -180,29 +203,38 @@ export default function OnboardingPage() {
 
               <div className="mt-8 space-y-5">
                 <Field label="Services Offered">
-                  <input placeholder="Type and press enter..." className="input" />
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {services.map((s) => (
-                      <span key={s} className="rounded-md bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                        {s}
-                      </span>
-                    ))}
-                  </div>
+                  <TagInput values={services} onChange={setServices} placeholder="Type and press enter..." />
                 </Field>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <Field label="Pricing Range" className="flex-1">
-                    <input defaultValue="₹ 50,000" className="input" />
+                  <Field label="Pricing Range — Min (₹)" className="flex-1">
+                    <input
+                      type="number"
+                      value={pricingMin}
+                      onChange={(e) => setPricingMin(e.target.value)}
+                      className="input"
+                    />
                   </Field>
                   <span className="hidden text-sm text-slate-400 sm:mt-6 sm:block">to</span>
-                  <Field label=" " className="flex-1">
-                    <input defaultValue="₹ 50,00,000+" className="input" />
+                  <Field label="Pricing Range — Max (₹)" className="flex-1">
+                    <input
+                      type="number"
+                      value={pricingMax}
+                      onChange={(e) => setPricingMax(e.target.value)}
+                      className="input"
+                    />
                   </Field>
                 </div>
                 <Field label="Target Audience">
-                  <textarea placeholder="Describe your ideal customer profile..." rows={3} className="input resize-none" />
+                  <textarea
+                    value={targetAudience}
+                    onChange={(e) => setTargetAudience(e.target.value)}
+                    placeholder="Describe your ideal customer profile..."
+                    rows={3}
+                    className="input resize-none"
+                  />
                 </Field>
                 <Field label="Unique Selling Propositions (USPs)">
-                  <input placeholder="E.g. Free registration..." className="input" />
+                  <TagInput values={usps} onChange={setUsps} placeholder="E.g. Free registration..." />
                 </Field>
               </div>
             </div>
@@ -240,7 +272,7 @@ export default function OnboardingPage() {
                   </div>
                 </Field>
                 <Field label="Competitors">
-                  <input placeholder="E.g. Lodha Group, DLF..." className="input" />
+                  <TagInput values={competitors} onChange={setCompetitors} placeholder="E.g. Lodha Group, DLF..." />
                 </Field>
                 <Field label="Company Logo">
                   <div className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 py-10 text-center">
@@ -280,6 +312,10 @@ export default function OnboardingPage() {
                   </div>
                 </div>
               </div>
+
+              {launchError && (
+                <p className="mt-4 text-sm font-medium text-red-600">{launchError}</p>
+              )}
 
               <Button className="mt-6 w-full" onClick={handleLaunch} disabled={launching}>
                 {launching ? "Launching…" : "Create Organisation"}

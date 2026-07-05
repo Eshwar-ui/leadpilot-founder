@@ -2,18 +2,21 @@
 
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from "recharts";
 
+// 5 dimensions, matching the rubric actually implemented in the backend
+// (config/score_dimensions.json: opening/discovery/pitch/objection_handling/
+// closing, 20pts each) — not the 6 fictional ones (product/ei/followUp) the
+// original mock invented.
 export function SkillRadar({
   skills,
 }: {
-  skills: { opening: number; product: number; objection: number; closing: number; ei: number; followUp: number };
+  skills: { opening: number; discovery: number; pitch: number; objectionHandling: number; closing: number };
 }) {
   const data = [
     { skill: "Opening", value: skills.opening },
-    { skill: "Product", value: skills.product },
-    { skill: "Objection", value: skills.objection },
+    { skill: "Discovery", value: skills.discovery },
+    { skill: "Pitch", value: skills.pitch },
+    { skill: "Objection", value: skills.objectionHandling },
     { skill: "Closing", value: skills.closing },
-    { skill: "EI", value: skills.ei },
-    { skill: "Follow-up", value: skills.followUp },
   ];
 
   return (

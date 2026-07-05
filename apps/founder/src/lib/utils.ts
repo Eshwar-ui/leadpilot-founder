@@ -17,3 +17,10 @@ export function formatLakhs(value: number): string {
   if (abs >= 1000) return `₹${(value / 1000).toFixed(1)}K`;
   return `₹${value}`;
 }
+
+/** Formats seconds as "4m 20s", e.g. for average call talk time. */
+export function formatSeconds(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}m ${s}s`;
+}

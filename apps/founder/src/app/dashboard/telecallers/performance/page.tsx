@@ -1,14 +1,40 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Download } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Sparkline } from "@/components/charts/Sparkline";
-import { telecallers } from "@/lib/mock-data";
-import { formatLakhs, cn } from "@/lib/utils";
+import { ApiError, telecallersApi, type TelecallerPerformance } from "@/lib/api";
+import { formatSeconds, cn } from "@/lib/utils";
+
+function initials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]!.toUpperCase())
+    .join("");
+}
 
 export default function PerformanceMatrixPage() {
-  const idle = telecallers.find((t) => t.id === "priya-nair")!;
+  const [telecallers, setTelecallers] = useState<TelecallerPerformance[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  function load() {
+    setLoading(true);
+    setError(null);
+    telecallersApi
+      .performance()
+      .then((res) => setTelecallers(res.telecallers))
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load telecaller performance"))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(load, []);
 
   return (
     <div className="pb-10">
@@ -16,96 +42,87 @@ export default function PerformanceMatrixPage() {
         title="Team Performance Overview"
         description="Ranked by AI call quality — click on a telecaller to view their complete profile."
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-lg border border-slate-200 p-0.5 text-xs">
-              {["This week", "This month", "Custom"].map((r) => (
-                <span
-                  key={r}
-                  className={cn(
-                    "rounded-md px-2.5 py-1.5 font-medium",
-                    r === "This month" ? "bg-slate-900 text-white" : "text-slate-400"
-                  )}
-                >
-                  {r}
-                </span>
-              ))}
-            </div>
-            <Button variant="outline" size="sm">
-              <Download className="size-3.5" /> CSV
-            </Button>
-          </div>
+          <Button variant="outline" size="sm">
+            <Download className="size-3.5" /> CSV
+          </Button>
         }
       />
 
-      <div className="mt-4 px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-sm text-amber-800">
-            <span className="font-semibold text-amber-900">{idle.name}</span> — idle 52 min. Watch: approaching idle
-            threshold.
-          </p>
-          <Button size="sm" className="bg-amber-500 hover:bg-amber-600">
-            Ping Manager
-          </Button>
+      {error && (
+        <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error} —{" "}
+          <button className="font-semibold underline" onClick={load}>
+            Retry
+          </button>
         </div>
-      </div>
+      )}
 
       <div className="mt-4 px-4 sm:px-6 lg:px-8">
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                <th className="px-5 py-3">Telecaller</th>
-                <th className="px-3 py-3 text-right">Calls</th>
-                <th className="px-3 py-3 text-right">Connect %</th>
-                <th className="px-3 py-3 text-right">Positive %</th>
-                <th className="px-3 py-3 text-right">Close %</th>
-                <th className="px-3 py-3 text-right">Talk Time</th>
-                <th className="px-3 py-3 text-right">Quality</th>
-                <th className="px-3 py-3 text-right">Revenue</th>
-                <th className="px-5 py-3 text-right">30D</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {telecallers.map((t) => (
-                <tr key={t.id} className="hover:bg-slate-50">
-                  <td className="px-5 py-3">
-                    <Link href={`/dashboard/telecallers/performance/${t.id}`} className="flex items-center gap-2.5">
-                      <span className="flex size-8 items-center justify-center rounded-full bg-primary-50 text-xs font-semibold text-primary-700">
-                        {t.initials}
-                      </span>
-                      <span className="font-semibold text-slate-900">{t.name}</span>
-                    </Link>
-                  </td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">{t.calls}</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">{t.connectPct}%</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">{t.positivePct}%</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">{t.closePct}%</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">{t.talkTime}</td>
-                  <td className="px-3 py-3 text-right">
-                    <span
-                      className={cn(
-                        "font-mono font-semibold tabular-nums",
-                        t.quality >= 80 ? "text-emerald-600" : t.quality >= 60 ? "text-amber-600" : "text-red-600"
-                      )}
-                    >
-                      {t.quality}
-                    </span>
-                    <span className="text-slate-400">/100</span>
-                  </td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">{formatLakhs(t.revenue)}</td>
-                  <td className="px-5 py-3">
-                    <Sparkline trend={t.trend} className="ml-auto h-6 w-20" />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        </Card>
+        {loading ? (
+          <p className="py-10 text-center text-sm text-slate-400">Loading team performance…</p>
+        ) : telecallers.length === 0 && !error ? (
+          <p className="py-10 text-center text-sm text-slate-400">
+            No telecallers yet. Invite one from Manage Team to see their performance here.
+          </p>
+        ) : (
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    <th className="px-5 py-3">Telecaller</th>
+                    <th className="px-3 py-3 text-right">Calls</th>
+                    <th className="px-3 py-3 text-right">Connect %</th>
+                    <th className="px-3 py-3 text-right">Positive %</th>
+                    <th className="px-3 py-3 text-right">Close %</th>
+                    <th className="px-3 py-3 text-right">Talk Time</th>
+                    <th className="px-3 py-3 text-right">Quality</th>
+                    <th className="px-5 py-3 text-right">30D</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {telecallers.map((t) => (
+                    <tr key={t.id} className="hover:bg-slate-50">
+                      <td className="px-5 py-3">
+                        <Link href={`/dashboard/telecallers/performance/${t.id}`} className="flex items-center gap-2.5">
+                          <span className="flex size-8 items-center justify-center rounded-full bg-primary-50 text-xs font-semibold text-primary-700">
+                            {initials(t.name)}
+                          </span>
+                          <span className="font-semibold text-slate-900">{t.name}</span>
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3 text-right font-mono tabular-nums">{t.calls}</td>
+                      <td className="px-3 py-3 text-right font-mono tabular-nums">{t.connect_pct}%</td>
+                      <td className="px-3 py-3 text-right font-mono tabular-nums">{t.positive_pct}%</td>
+                      <td className="px-3 py-3 text-right font-mono tabular-nums">{t.close_pct}%</td>
+                      <td className="px-3 py-3 text-right font-mono tabular-nums">{formatSeconds(t.talk_time_seconds)}</td>
+                      <td className="px-3 py-3 text-right">
+                        <span
+                          className={cn(
+                            "font-mono font-semibold tabular-nums",
+                            t.quality >= 80 ? "text-emerald-600" : t.quality >= 60 ? "text-amber-600" : "text-red-600"
+                          )}
+                        >
+                          {t.quality}
+                        </span>
+                        <span className="text-slate-400">/100</span>
+                      </td>
+                      <td className="px-5 py-3">
+                        {t.trend ? (
+                          <Sparkline trend={t.trend} className="ml-auto h-6 w-20" />
+                        ) : (
+                          <span className="block text-right text-xs text-slate-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
         <p className="mt-3 text-xs text-slate-400">
-          Quality Score = Script compliance (25%) + Tone (25%) + Objection handling (20%) + Closing (20%) + Punctuality
-          (10%)
+          Quality Score = Opening (20) + Discovery (20) + Pitch (20) + Objection Handling (20) + Closing (20)
         </p>
       </div>
     </div>

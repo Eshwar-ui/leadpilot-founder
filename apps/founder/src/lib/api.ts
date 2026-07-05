@@ -1,3 +1,5 @@
+import { getToken } from "@/lib/auth";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type AuthUser = {
@@ -39,6 +41,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Same as request(), but attaches the stored session token — used by every
+// endpoint that requires login (everything except register/login themselves).
+async function authedRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken();
+  if (!token) throw new ApiError(401, "Not signed in");
+  return request<T>(path, {
+    ...options,
+    headers: { Authorization: `Bearer ${token}`, ...options.headers },
+  });
+}
+
 export const authApi = {
   register(input: { org_name: string; name: string; email: string; password: string }) {
     return request<AuthResponse>("/api/auth/register", {
@@ -57,11 +70,272 @@ export const authApi = {
       headers: { Authorization: `Bearer ${token}` },
     });
   },
-  renameOrg(token: string, name: string) {
-    return request<{ id: string; name: string; slug: string }>("/api/auth/org", {
+};
+
+export type OrgProfile = {
+  id: string;
+  name: string;
+  slug: string;
+  industry: string | null;
+  website_url: string | null;
+  services: string[] | null;
+  pricing_min: number | null;
+  pricing_max: number | null;
+  target_audience: string | null;
+  competitors: string[] | null;
+  brand_voice: string | null;
+  languages: string[] | null;
+  usps: string[] | null;
+};
+
+export type OrgProfileInput = Partial<Omit<OrgProfile, "id" | "slug">>;
+
+export const orgApi = {
+  get() {
+    return authedRequest<OrgProfile>("/api/auth/org");
+  },
+  update(input: OrgProfileInput) {
+    return authedRequest<OrgProfile>("/api/auth/org", {
       method: "PATCH",
-      headers: { Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(input),
     });
+  },
+};
+
+export type TeamMember = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: string;
+  status: "Active" | "Inactive";
+  calls: number;
+  leads: number;
+  quality: number | null;
+  last_active: string | null;
+};
+
+export type InviteMemberResponse = {
+  member: TeamMember;
+  temp_password: string;
+};
+
+export const teamApi = {
+  list() {
+    return authedRequest<TeamMember[]>("/api/team");
+  },
+  invite(input: { email: string; name: string; role: string; phone?: string }) {
+    return authedRequest<InviteMemberResponse>("/api/team/invite", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+  update(userId: string, input: { role?: string; is_active?: boolean }) {
+    return authedRequest<TeamMember>(`/api/team/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  },
+};
+
+export type BoardLead = {
+  id: string;
+  name: string;
+  source: string | null;
+  score: number | null;
+  pipeline_stage: string;
+  telecaller_name: string | null;
+  days_stuck: number;
+};
+
+export type LeadsBoard = {
+  stages: string[];
+  leads: BoardLead[];
+};
+
+export const leadsApi = {
+  board() {
+    return authedRequest<LeadsBoard>("/api/leads/board");
+  },
+  updateStage(leadId: string, stage: string) {
+    return authedRequest<{ id: string; pipeline_stage: string }>(`/api/leads/${leadId}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ stage }),
+    });
+  },
+};
+
+export type ScoreDimensions = {
+  opening: number;
+  discovery: number;
+  pitch: number;
+  objection_handling: number;
+  closing: number;
+};
+
+export type TelecallerMetrics = {
+  calls: number;
+  connect_pct: number;
+  positive_pct: number;
+  close_pct: number;
+  talk_time_seconds: number;
+  quality: number;
+  dimensions: ScoreDimensions;
+};
+
+export type TelecallerPerformance = TelecallerMetrics & {
+  id: string;
+  name: string;
+  trend: "up" | "down" | null;
+};
+
+export type TelecallerPerformanceResponse = {
+  telecallers: TelecallerPerformance[];
+  team_average: TelecallerMetrics;
+};
+
+export type TelecallerCallSummary = {
+  call_id: string;
+  timestamp: string;
+  lead_verdict: string;
+  total_score: number;
+};
+
+export type TelecallerTimelineEntry = {
+  call_id: string;
+  timestamp: string;
+  lead_verdict: string;
+};
+
+export type TelecallerPerformanceDetail = TelecallerPerformance & {
+  best_calls: TelecallerCallSummary[];
+  needs_review: TelecallerCallSummary[];
+  timeline: TelecallerTimelineEntry[];
+};
+
+export const telecallersApi = {
+  performance() {
+    return authedRequest<TelecallerPerformanceResponse>("/api/telecallers/performance");
+  },
+  performanceDetail(telecallerId: string) {
+    return authedRequest<TelecallerPerformanceDetail>(`/api/telecallers/performance/${telecallerId}`);
+  },
+};
+
+export type DashboardSnapshot = {
+  leads_today: number;
+  calls_today: number;
+  hot_leads: number;
+  conversion_rate_pct: number;
+  total_leads: number;
+};
+
+export const dashboardApi = {
+  snapshot() {
+    return authedRequest<DashboardSnapshot>("/api/dashboard/snapshot");
+  },
+};
+
+export type LeadQuality = {
+  verdict_breakdown: { Hot: number; Warm: number; Cold: number; Junk: number };
+  source_breakdown: Record<string, number>;
+  avg_bant_score: number | null;
+};
+
+export type WastedLead = {
+  id: string;
+  name: string;
+  source: string | null;
+  days_since_created: number;
+  pipeline_stage: string;
+};
+
+export type LeadWastage = {
+  leads: WastedLead[];
+  total_wasted: number;
+};
+
+export type ZombieLead = {
+  id: string;
+  name: string;
+  pipeline_stage: string;
+  days_stalled: number;
+  telecaller_name: string | null;
+};
+
+export type ZombieLeads = {
+  leads: ZombieLead[];
+  threshold_days: number;
+};
+
+export const leadsQualityApi = {
+  quality() {
+    return authedRequest<LeadQuality>("/api/leads/quality");
+  },
+  wastage() {
+    return authedRequest<LeadWastage>("/api/leads/wastage");
+  },
+  zombie() {
+    return authedRequest<ZombieLeads>("/api/leads/zombie");
+  },
+};
+
+export type AttendanceRecord = {
+  id: string;
+  user_id: string;
+  telecaller_name: string;
+  date: string;
+  check_in_at: string | null;
+  check_out_at: string | null;
+  hours_worked: number | null;
+};
+
+export type AttendanceResponse = {
+  records: AttendanceRecord[];
+};
+
+export const attendanceApi = {
+  list(params?: { from_date?: string; to_date?: string; telecaller_id?: string }) {
+    const query = new URLSearchParams();
+    if (params?.from_date) query.set("from_date", params.from_date);
+    if (params?.to_date) query.set("to_date", params.to_date);
+    if (params?.telecaller_id) query.set("telecaller_id", params.telecaller_id);
+    const qs = query.toString();
+    return authedRequest<AttendanceResponse>(`/api/attendance${qs ? `?${qs}` : ""}`);
+  },
+};
+
+export type InsightSeverity = "high" | "medium" | "low";
+export type InsightCategory = "wastage" | "zombie" | "performance" | "quality";
+
+export type Insight = {
+  id: string;
+  category: InsightCategory;
+  severity: InsightSeverity;
+  title: string;
+  description: string;
+};
+
+export type InsightsResponse = {
+  insights: Insight[];
+};
+
+export const insightsApi = {
+  list() {
+    return authedRequest<InsightsResponse>("/api/insights");
+  },
+};
+
+export type ReportType = "weekly_summary" | "telecaller_performance" | "lead_quality";
+
+export type ReportPreview<T = unknown> = {
+  report_type: ReportType;
+  generated_at: string;
+  data: T;
+};
+
+export const reportsApi = {
+  preview(reportType: ReportType) {
+    return authedRequest<ReportPreview>(`/api/reports/preview?report_type=${reportType}`);
   },
 };
