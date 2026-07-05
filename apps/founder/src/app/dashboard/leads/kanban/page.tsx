@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { ApiError, leadsApi, type BoardLead } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Clock, AlertTriangle } from "lucide-react";
@@ -45,6 +46,8 @@ export default function KanbanBoardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
+  const [closingLead, setClosingLead] = useState<BoardLead | null>(null);
+  const [dealValueInput, setDealValueInput] = useState("");
 
   function load() {
     setLoading(true);
@@ -61,19 +64,37 @@ export default function KanbanBoardPage() {
 
   useEffect(load, []);
 
-  async function moveStage(lead: BoardLead, stage: string) {
+  async function moveStage(lead: BoardLead, stage: string, dealValue?: number) {
     if (stage === lead.pipeline_stage) return;
     setMovingId(lead.id);
     const prevStage = lead.pipeline_stage;
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, pipeline_stage: stage } : l)));
     try {
-      await leadsApi.updateStage(lead.id, stage);
+      await leadsApi.updateStage(lead.id, stage, dealValue);
     } catch {
       // Revert on failure — don't leave the board showing a move that didn't persist.
       setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, pipeline_stage: prevStage } : l)));
     } finally {
       setMovingId(null);
     }
+  }
+
+  function handleStagePick(lead: BoardLead, stage: string) {
+    if (stage === "Closed Won") {
+      // Revenue reporting needs a deal value to be worth anything — ask for it
+      // before persisting the move instead of silently recording ₹0.
+      setDealValueInput("");
+      setClosingLead(lead);
+      return;
+    }
+    moveStage(lead, stage);
+  }
+
+  function confirmCloseWon() {
+    if (!closingLead) return;
+    const value = Number(dealValueInput);
+    moveStage(closingLead, "Closed Won", Number.isFinite(value) && value > 0 ? value : undefined);
+    setClosingLead(null);
   }
 
   const stuckList = useMemo(
@@ -162,7 +183,7 @@ export default function KanbanBoardPage() {
                           <select
                             value={lead.pipeline_stage}
                             disabled={movingId === lead.id}
-                            onChange={(e) => moveStage(lead, e.target.value)}
+                            onChange={(e) => handleStagePick(lead, e.target.value)}
                             className="mt-2 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 disabled:opacity-50"
                           >
                             {stages.map((s) => (
@@ -227,6 +248,37 @@ export default function KanbanBoardPage() {
           )}
         </>
       )}
+
+      <Modal
+        open={closingLead !== null}
+        onClose={() => setClosingLead(null)}
+        title="Deal value"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setClosingLead(null)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={confirmCloseWon}>
+              Mark Closed Won
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-3">
+          Moving <b>{closingLead?.name}</b> to Closed Won. Enter the deal value so it shows up in the revenue
+          dashboard (leave blank if unknown).
+        </p>
+        <input
+          autoFocus
+          type="number"
+          min={0}
+          placeholder="e.g. 85000"
+          value={dealValueInput}
+          onChange={(e) => setDealValueInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && confirmCloseWon()}
+          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+        />
+      </Modal>
     </div>
   );
 }

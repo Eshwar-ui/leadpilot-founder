@@ -79,6 +79,7 @@ export default function SettingsPage() {
         brand_voice: profile.brand_voice ?? undefined,
         languages: profile.languages ?? [],
         usps: profile.usps ?? [],
+        monthly_revenue_target: profile.monthly_revenue_target ?? undefined,
       });
       setProfile(updated);
       setSaved(true);
@@ -164,6 +165,19 @@ export default function SettingsPage() {
                   onChange={(e) => update("pricing_max", e.target.value ? Number(e.target.value) : null)}
                   className="input"
                 />
+              </SettingsField>
+              <SettingsField label="Monthly Revenue Target (₹)" className="sm:col-span-2">
+                <input
+                  type="number"
+                  min={0}
+                  value={profile.monthly_revenue_target ?? ""}
+                  onChange={(e) => update("monthly_revenue_target", e.target.value ? Number(e.target.value) : null)}
+                  placeholder="e.g. 3600000"
+                  className="input"
+                />
+                <p className="mt-1 text-xs text-slate-400">
+                  Drives the Monthly Goal gauge and the target line on the revenue chart in Daily Snapshot.
+                </p>
               </SettingsField>
               <SettingsField label="Target Audience" className="sm:col-span-2">
                 <textarea

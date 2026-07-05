@@ -3,16 +3,6 @@ export const org = {
   date: "Tue, 23 Jun 2026",
 };
 
-const RAW_REVENUE = [
-  72, 65, 78, 88, 108, 0, 92, 98, 82, 74, 112, 0, 90, 95, 88, 78, 106, 0, 118,
-  108, 96, 122, 118, 105, 0, 96, 108, 0, 121, 88,
-];
-
-export const revenueSeries = RAW_REVENUE.map((v, i) => ({
-  day: i + 1,
-  revenue: v * 1000,
-}));
-
 export const weeklyRevenue = [
   { week: "18-May", actual: 62, projected: 58 },
   { week: "25-May", actual: 70, projected: 64 },
@@ -308,13 +298,6 @@ export const insights = [
     text: "Calls after 3 PM have 34% higher connection rates for Google Ads leads. Consider shifting Arjun and Vikram's Google lead queue to the afternoon slot — estimated uplift: 8–10 additional connects per day.",
     action: "Adjust Shift Schedule",
   },
-];
-
-export const liveActivity = [
-  { time: "10:42", type: "success", title: "Deal Closed", detail: "Arjun Rao · ₹85,000 · Prestige NRI Heights", cta: "View" },
-  { time: "10:38", type: "warning", title: "Telecaller Idle", detail: "Priya idle 52 min · 3 leads in queue", cta: "Review" },
-  { time: "10:31", type: "info", title: "High-score Lead", detail: "Google Ads · Rajesh Kumar · Score 84", cta: "Assign" },
-  { time: "10:18", type: "danger", title: "Budget Alert", detail: "Meta Lead Gen +20% over daily cap", cta: "Pause" },
 ];
 
 export const reportTypes = [

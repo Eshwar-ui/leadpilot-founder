@@ -86,6 +86,7 @@ export type OrgProfile = {
   brand_voice: string | null;
   languages: string[] | null;
   usps: string[] | null;
+  monthly_revenue_target: number | null;
 };
 
 export type OrgProfileInput = Partial<Omit<OrgProfile, "id" | "slug">>;
@@ -157,11 +158,14 @@ export const leadsApi = {
   board() {
     return authedRequest<LeadsBoard>("/api/leads/board");
   },
-  updateStage(leadId: string, stage: string) {
-    return authedRequest<{ id: string; pipeline_stage: string }>(`/api/leads/${leadId}/stage`, {
-      method: "PATCH",
-      body: JSON.stringify({ stage }),
-    });
+  updateStage(leadId: string, stage: string, dealValue?: number) {
+    return authedRequest<{ id: string; pipeline_stage: string; deal_value: number | null }>(
+      `/api/leads/${leadId}/stage`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(dealValue != null ? { stage, deal_value: dealValue } : { stage }),
+      }
+    );
   },
 };
 
@@ -230,9 +234,55 @@ export type DashboardSnapshot = {
   total_leads: number;
 };
 
+export type RevenuePoint = { date: string; day: number; revenue: number };
+
+export type DashboardRevenue = {
+  range_days: number;
+  series: RevenuePoint[];
+  mtd_total: number;
+  avg_per_day: number;
+  best_day: RevenuePoint | null;
+  pct_change_vs_last_month: number | null;
+  target_per_day: number | null;
+  working_days_elapsed: number;
+  days_in_month: number;
+  on_target_days: number | null;
+  off_target_days: number | null;
+};
+
+export type DashboardGoal = {
+  monthly_target: number | null;
+  mtd_revenue: number;
+  pct_of_target: number | null;
+  days_left: number;
+  needed_per_day: number | null;
+  deals_closed: number;
+  avg_deal_value: number | null;
+};
+
+export type ActivityEventType = "success" | "warning" | "info" | "danger";
+
+export type ActivityEvent = {
+  id: string;
+  type: ActivityEventType;
+  time: string;
+  title: string;
+  detail: string;
+  cta: string;
+};
+
 export const dashboardApi = {
   snapshot() {
     return authedRequest<DashboardSnapshot>("/api/dashboard/snapshot");
+  },
+  revenue(rangeDays: 1 | 7 | 30 | 90 = 30) {
+    return authedRequest<DashboardRevenue>(`/api/dashboard/revenue?range=${rangeDays}`);
+  },
+  goal() {
+    return authedRequest<DashboardGoal>("/api/dashboard/goal");
+  },
+  activity() {
+    return authedRequest<{ events: ActivityEvent[] }>("/api/dashboard/activity");
   },
 };
 
