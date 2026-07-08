@@ -27,7 +27,7 @@ function metricsOf(t: TelecallerMetrics) {
     { key: "connect_pct", label: "Connection Rate", value: t.connect_pct, fmt: (v: number) => `${v}%` },
     { key: "positive_pct", label: "Positive Rate", value: t.positive_pct, fmt: (v: number) => `${v}%` },
     { key: "close_pct", label: "Close Rate", value: t.close_pct, fmt: (v: number) => `${v}%` },
-    { key: "quality", label: "Quality Score", value: t.quality, fmt: (v: number) => `${v}/100` },
+    { key: "quality", label: "Quality Score", value: t.quality, fmt: (v: number) => `${v}/110` },
     { key: "talk_time_seconds", label: "Avg Talk Time", value: t.talk_time_seconds, fmt: (v: number) => formatSeconds(v) },
   ] as const;
 }

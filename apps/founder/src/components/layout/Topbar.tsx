@@ -3,16 +3,26 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BarChart3, Bell, ChevronDown, LogOut, Menu, Users2 } from "lucide-react";
-import { org } from "@/lib/mock-data";
 import { clearSession, getStoredUser } from "@/lib/auth";
 import type { AuthUser } from "@/lib/api";
 
 export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  // Live date, set client-side to avoid a hydration mismatch (was a hardcoded
+  // "Tue, 23 Jun 2026" from mock-data.ts).
+  const [today, setToday] = useState("");
   const router = useRouter();
 
   useEffect(() => {
     setUser(getStoredUser());
+    setToday(
+      new Date().toLocaleDateString("en-GB", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }),
+    );
   }, []);
 
   function handleLogout() {
@@ -20,7 +30,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
     router.push("/login");
   }
 
-  const orgName = user?.org_name ?? org.name;
+  const orgName = user?.org_name ?? "";
   const initials = user
     ? user.name
         .split(" ")
@@ -55,7 +65,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
           <span className="hidden max-w-[10rem] truncate md:inline">{orgName}</span>
           <ChevronDown className="size-3.5 shrink-0 text-slate-400" />
         </button>
-        <span className="hidden text-sm text-slate-400 lg:inline">{org.date}</span>
+        <span className="hidden text-sm text-slate-400 lg:inline">{today}</span>
         <button className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50">
           <Bell className="size-4" />
         </button>

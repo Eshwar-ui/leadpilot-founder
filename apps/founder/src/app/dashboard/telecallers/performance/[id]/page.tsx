@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, Sparkles, Download, Calendar } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -36,6 +37,7 @@ const verdictTone: Record<string, string> = {
 
 export default function TelecallerProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [detail, setDetail] = useState<TelecallerPerformanceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,8 +78,10 @@ export default function TelecallerProfilePage({ params }: { params: Promise<{ id
       ) : (
         <>
           <div className="mt-4 flex items-center justify-end gap-2 px-4 sm:px-6 lg:px-8">
-            <Button variant="outline" size="sm">Compare</Button>
-            <Button size="sm">
+            <Button variant="outline" size="sm" onClick={() => router.push("/dashboard/telecallers/comparison")}>
+              Compare
+            </Button>
+            <Button size="sm" onClick={() => router.push(`/dashboard/telecallers/coaching?telecaller_id=${id}`)}>
               <Sparkles className="size-3.5" /> Coach
             </Button>
           </div>
@@ -100,7 +104,7 @@ export default function TelecallerProfilePage({ params }: { params: Promise<{ id
             <StatCard label="Positive Rate" value={`${detail.positive_pct}%`} />
             <StatCard label="Close Rate" value={`${detail.close_pct}%`} />
             <StatCard label="Avg Handle Time" value={formatSeconds(detail.talk_time_seconds)} />
-            <StatCard label="Quality Score" value={detail.quality} suffix="/100" />
+            <StatCard label="Quality Score" value={detail.quality} suffix="/110" />
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-4 px-4 sm:px-6 lg:px-8 lg:grid-cols-2">
@@ -124,7 +128,11 @@ export default function TelecallerProfilePage({ params }: { params: Promise<{ id
                   <p className="py-4 text-sm text-slate-400">No standout calls yet.</p>
                 ) : (
                   detail.best_calls.map((c) => (
-                    <div key={c.call_id} className="flex items-center justify-between py-2.5 text-sm">
+                    <Link
+                      key={c.call_id}
+                      href={`/dashboard/telecallers/performance/${id}/calls/${c.call_id}`}
+                      className="flex items-center justify-between py-2.5 text-sm hover:bg-slate-50"
+                    >
                       <span className="text-slate-600">
                         <span className="mr-2 text-slate-400">{formatTime(c.timestamp)}</span>
                         <span className={cn("rounded-md px-1.5 py-0.5 text-xs font-medium", verdictTone[c.lead_verdict] ?? "bg-slate-100 text-slate-500")}>
@@ -134,7 +142,7 @@ export default function TelecallerProfilePage({ params }: { params: Promise<{ id
                       <span className="rounded-md bg-emerald-50 px-2 py-0.5 font-mono text-xs font-semibold text-emerald-700">
                         {c.total_score}
                       </span>
-                    </div>
+                    </Link>
                   ))
                 )}
               </div>
@@ -149,7 +157,11 @@ export default function TelecallerProfilePage({ params }: { params: Promise<{ id
                   <p className="py-4 text-sm text-slate-400">Nothing flagged for review.</p>
                 ) : (
                   detail.needs_review.map((c) => (
-                    <div key={c.call_id} className="flex items-center justify-between py-2.5 text-sm">
+                    <Link
+                      key={c.call_id}
+                      href={`/dashboard/telecallers/performance/${id}/calls/${c.call_id}`}
+                      className="flex items-center justify-between py-2.5 text-sm hover:bg-slate-50"
+                    >
                       <span className="text-slate-600">
                         <span className="mr-2 text-slate-400">{formatTime(c.timestamp)}</span>
                         <span className={cn("rounded-md px-1.5 py-0.5 text-xs font-medium", verdictTone[c.lead_verdict] ?? "bg-slate-100 text-slate-500")}>
@@ -159,7 +171,7 @@ export default function TelecallerProfilePage({ params }: { params: Promise<{ id
                       <span className="rounded-md bg-red-50 px-2 py-0.5 font-mono text-xs font-semibold text-red-700">
                         {c.total_score}
                       </span>
-                    </div>
+                    </Link>
                   ))
                 )}
               </div>
@@ -180,7 +192,11 @@ export default function TelecallerProfilePage({ params }: { params: Promise<{ id
                   <p className="px-5 py-6 text-sm text-slate-400">No calls logged yet.</p>
                 ) : (
                   detail.timeline.map((c) => (
-                    <div key={c.call_id} className="flex items-center justify-between px-5 py-3 text-sm">
+                    <Link
+                      key={c.call_id}
+                      href={`/dashboard/telecallers/performance/${id}/calls/${c.call_id}`}
+                      className="flex items-center justify-between px-5 py-3 text-sm hover:bg-slate-50"
+                    >
                       <div className="flex items-center gap-4">
                         <span className="font-mono text-xs text-slate-400">{formatTime(c.timestamp)}</span>
                         <span className="font-semibold text-slate-900">{c.call_id}</span>
@@ -193,7 +209,7 @@ export default function TelecallerProfilePage({ params }: { params: Promise<{ id
                       >
                         {c.lead_verdict}
                       </span>
-                    </div>
+                    </Link>
                   ))
                 )}
               </div>

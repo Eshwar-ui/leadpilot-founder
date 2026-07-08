@@ -45,6 +45,12 @@ export default function ManageTeamPage() {
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
 
+  const [resetMember, setResetMember] = useState<TeamMember | null>(null);
+  const [resetCustomPassword, setResetCustomPassword] = useState("");
+  const [resetTempPassword, setResetTempPassword] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSubmitting, setResetSubmitting] = useState(false);
+
   function loadTeam() {
     setLoading(true);
     setError(null);
@@ -87,6 +93,31 @@ export default function ManageTeamPage() {
       setInviteError(e instanceof ApiError ? e.message : "Failed to invite member");
     } finally {
       setInviteSubmitting(false);
+    }
+  }
+
+  function openResetPassword(member: TeamMember) {
+    setResetMember(member);
+    setResetCustomPassword("");
+    setResetTempPassword(null);
+    setResetError(null);
+  }
+
+  async function submitResetPassword() {
+    if (!resetMember) return;
+    if (resetCustomPassword && resetCustomPassword.length < 8) {
+      setResetError("Password must be at least 8 characters");
+      return;
+    }
+    setResetSubmitting(true);
+    setResetError(null);
+    try {
+      const { temp_password } = await teamApi.resetPassword(resetMember.id, resetCustomPassword || undefined);
+      setResetTempPassword(temp_password);
+    } catch (e) {
+      setResetError(e instanceof ApiError ? e.message : "Failed to reset password");
+    } finally {
+      setResetSubmitting(false);
     }
   }
 
@@ -159,6 +190,7 @@ export default function ManageTeamPage() {
                     <th className="px-3 py-3 text-right">Leads</th>
                     <th className="px-3 py-3">Quality</th>
                     <th className="px-5 py-3 text-right">Last Active</th>
+                    <th className="px-5 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -197,6 +229,14 @@ export default function ManageTeamPage() {
                         )}
                       </td>
                       <td className="px-5 py-3 text-right text-xs text-slate-500">{formatLastActive(m.last_active)}</td>
+                      <td className="px-5 py-3 text-right">
+                        <button
+                          className="text-xs font-semibold text-primary-600 hover:underline"
+                          onClick={() => openResetPassword(m)}
+                        >
+                          Reset Password
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -286,6 +326,65 @@ export default function ManageTeamPage() {
                 <option value="ad_manager">Ad Manager</option>
                 <option value="admin">Admin</option>
               </select>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={resetMember !== null}
+        onClose={() => setResetMember(null)}
+        title={resetTempPassword ? "Password reset" : "Reset Password"}
+        footer={
+          resetTempPassword ? (
+            <Button size="sm" className="w-full" onClick={() => setResetMember(null)}>
+              Done
+            </Button>
+          ) : (
+            <>
+              <Button size="sm" variant="outline" className="flex-1" onClick={() => setResetMember(null)}>
+                Cancel
+              </Button>
+              <Button size="sm" className="flex-1" onClick={submitResetPassword} disabled={resetSubmitting}>
+                {resetSubmitting ? "Resetting…" : "Reset Password"}
+              </Button>
+            </>
+          )
+        }
+      >
+        {resetTempPassword ? (
+          <div className="space-y-2">
+            <p>
+              <span className="font-semibold text-slate-900">{resetMember?.name}</span>&apos;s password was
+              reset. Share this {resetCustomPassword ? "" : "temporary "}password with them — it won&apos;t be
+              shown again.
+            </p>
+            <code className="block rounded-lg bg-slate-100 px-3 py-2 font-mono text-sm text-slate-800">
+              {resetTempPassword}
+            </code>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {resetError && <p className="text-xs font-medium text-red-600">{resetError}</p>}
+            <p>
+              Reset the password for <span className="font-semibold text-slate-900">{resetMember?.name}</span>?
+              Their current password will stop working immediately.
+            </p>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">
+                New Password (optional)
+              </label>
+              <input
+                type="text"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono"
+                value={resetCustomPassword}
+                onChange={(e) => setResetCustomPassword(e.target.value)}
+                placeholder="Leave blank to auto-generate one"
+              />
+              <p className="mt-1 text-xs text-slate-400">
+                Set a specific password, or leave this blank to generate a random temporary one.
+                Either way, they&apos;ll need to change it the next time they log in.
+              </p>
             </div>
           </div>
         )}

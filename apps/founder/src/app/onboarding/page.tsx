@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Upload } from "lucide-react";
 import { StepIndicator } from "@/components/onboarding/StepIndicator";
@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/Button";
 import { TagInput } from "@/components/ui/TagInput";
 import { cn } from "@/lib/utils";
 import { ApiError, orgApi } from "@/lib/api";
+
+const MAX_LOGO_BYTES = 5 * 1024 * 1024; // 5MB, matches the dropzone's own copy
 
 const STEP_META = [
   {
@@ -44,7 +46,9 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
 
-  // Step 1
+  // Step 1 — placeholders until the org-profile fetch below resolves; a
+  // brand-new org (fetch returns all-null fields) keeps these as sensible
+  // defaults rather than blanking the form.
   const [orgName, setOrgName] = useState("TechCorp India");
   const [industry, setIndustry] = useState("Real Estate");
   const [website, setWebsite] = useState("techcorp.in");
@@ -62,11 +66,58 @@ export default function OnboardingPage() {
   // Step 3
   const [brandVoice, setBrandVoice] = useState("Authoritative");
   const [competitors, setCompetitors] = useState<string[]>([]);
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
 
+  // Draft prefill: without this, a mid-wizard refresh (before "Create
+  // Organisation" is hit) silently loses every field back to the hardcoded
+  // placeholders above. Runs once on mount; a brand-new org's all-null
+  // response just leaves the placeholders in place.
+  useEffect(() => {
+    let cancelled = false;
+    orgApi
+      .get()
+      .then((profile) => {
+        if (cancelled) return;
+        if (profile.name) setOrgName(profile.name);
+        if (profile.industry) setIndustry(profile.industry);
+        if (profile.website_url) setWebsite(profile.website_url);
+        if (profile.languages?.length) setLanguages(profile.languages);
+        if (profile.services?.length) setServices(profile.services);
+        if (profile.pricing_min != null) setPricingMin(String(profile.pricing_min));
+        if (profile.pricing_max != null) setPricingMax(String(profile.pricing_max));
+        if (profile.target_audience) setTargetAudience(profile.target_audience);
+        if (profile.usps?.length) setUsps(profile.usps);
+        if (profile.brand_voice) setBrandVoice(profile.brand_voice);
+        if (profile.competitors?.length) setCompetitors(profile.competitors);
+        if (profile.logo_url) setLogoDataUrl(profile.logo_url);
+      })
+      .catch(() => {
+        // No saved profile yet (or not logged in) — keep the placeholders.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const meta = STEP_META[step - 1];
+
+  function handleLogoSelect(file: File | undefined) {
+    setLogoError(null);
+    if (!file) return;
+    if (file.size > MAX_LOGO_BYTES) {
+      setLogoError("File is too large — max 5MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setLogoDataUrl(reader.result as string);
+    reader.onerror = () => setLogoError("Couldn't read that file — try another.");
+    reader.readAsDataURL(file);
+  }
 
   async function handleLaunch() {
     setLaunching(true);
@@ -84,6 +135,7 @@ export default function OnboardingPage() {
         brand_voice: brandVoice,
         languages,
         usps,
+        logo_url: logoDataUrl ?? undefined,
       });
       router.push("/dashboard");
     } catch (e) {
@@ -275,11 +327,30 @@ export default function OnboardingPage() {
                   <TagInput values={competitors} onChange={setCompetitors} placeholder="E.g. Lodha Group, DLF..." />
                 </Field>
                 <Field label="Company Logo">
-                  <div className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 py-10 text-center">
-                    <Upload className="size-6 text-primary-500" />
-                    <p className="text-sm font-medium text-slate-700">Click to upload or drag &amp; drop</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/svg+xml,image/png,image/jpeg"
+                    className="hidden"
+                    onChange={(e) => handleLogoSelect(e.target.files?.[0])}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 py-10 text-center hover:bg-slate-50"
+                  >
+                    {logoDataUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={logoDataUrl} alt="Company logo preview" className="h-16 w-auto object-contain" />
+                    ) : (
+                      <Upload className="size-6 text-primary-500" />
+                    )}
+                    <p className="text-sm font-medium text-slate-700">
+                      {logoDataUrl ? "Click to replace" : "Click to upload or drag & drop"}
+                    </p>
                     <p className="text-xs text-slate-400">SVG, PNG, or JPG (max. 5MB)</p>
-                  </div>
+                  </button>
+                  {logoError && <p className="mt-1.5 text-xs font-medium text-red-600">{logoError}</p>}
                 </Field>
               </div>
             </div>

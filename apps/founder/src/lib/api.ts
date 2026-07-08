@@ -9,6 +9,7 @@ export type AuthUser = {
   email: string;
   name: string;
   role: string;
+  must_reset_password: boolean;
 };
 
 export type AuthResponse = {
@@ -70,6 +71,12 @@ export const authApi = {
       headers: { Authorization: `Bearer ${token}` },
     });
   },
+  changePassword(input: { current_password: string; new_password: string }) {
+    return authedRequest<AuthUser>("/api/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
 };
 
 export type OrgProfile = {
@@ -87,6 +94,8 @@ export type OrgProfile = {
   languages: string[] | null;
   usps: string[] | null;
   monthly_revenue_target: number | null;
+  logo_url: string | null;
+  address: string | null;
 };
 
 export type OrgProfileInput = Partial<Omit<OrgProfile, "id" | "slug">>;
@@ -137,6 +146,12 @@ export const teamApi = {
       body: JSON.stringify(input),
     });
   },
+  resetPassword(userId: string, newPassword?: string) {
+    return authedRequest<InviteMemberResponse>(`/api/team/${userId}/reset-password`, {
+      method: "POST",
+      body: JSON.stringify(newPassword ? { new_password: newPassword } : {}),
+    });
+  },
 };
 
 export type BoardLead = {
@@ -164,6 +179,15 @@ export const leadsApi = {
       {
         method: "PATCH",
         body: JSON.stringify(dealValue != null ? { stage, deal_value: dealValue } : { stage }),
+      }
+    );
+  },
+  createLead(input: { name: string; phone?: string; reason?: string }) {
+    return authedRequest<{ contact_key: string; name: string; status: string; created: boolean }>(
+      "/api/leads",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
       }
     );
   },
@@ -217,12 +241,33 @@ export type TelecallerPerformanceDetail = TelecallerPerformance & {
   timeline: TelecallerTimelineEntry[];
 };
 
+export type TeamHealthStatus = "Active" | "Break" | "Inactive" | "Absent";
+
+export type TeamHealthEntry = {
+  id: string;
+  name: string;
+  status: TeamHealthStatus;
+  calls: number;
+  connected: number;
+  closed_won: number;
+  quality: number;
+  trend: "up" | "down" | null;
+  revenue_today: number;
+};
+
+export type TeamHealthResponse = {
+  telecallers: TeamHealthEntry[];
+};
+
 export const telecallersApi = {
   performance() {
     return authedRequest<TelecallerPerformanceResponse>("/api/telecallers/performance");
   },
   performanceDetail(telecallerId: string) {
     return authedRequest<TelecallerPerformanceDetail>(`/api/telecallers/performance/${telecallerId}`);
+  },
+  status() {
+    return authedRequest<TeamHealthResponse>("/api/telecallers/status");
   },
 };
 
@@ -286,10 +331,44 @@ export const dashboardApi = {
   },
 };
 
+export type SourceQualityRow = {
+  source: string;
+  total: number;
+  junk_pct: number;
+  positive_pct: number;
+  close_pct: number;
+};
+
 export type LeadQuality = {
   verdict_breakdown: { Hot: number; Warm: number; Cold: number; Junk: number };
   source_breakdown: Record<string, number>;
+  source_matrix: SourceQualityRow[];
   avg_bant_score: number | null;
+};
+
+export type ScoreBand = {
+  label: string;
+  count: number;
+  pct_of_total: number;
+  close_rate_pct: number;
+};
+
+export type ScoreDistribution = {
+  bands: ScoreBand[];
+};
+
+export type AgeingLead = {
+  id: string;
+  name: string;
+  source: string | null;
+  pipeline_stage: string;
+  days_stuck: number;
+  bucket: "0-3" | "3-7" | "7+";
+};
+
+export type LeadAgeing = {
+  summary: { "0-3": number; "3-7": number; "7+": number };
+  leads: AgeingLead[];
 };
 
 export type WastedLead = {
@@ -327,6 +406,12 @@ export const leadsQualityApi = {
   },
   zombie() {
     return authedRequest<ZombieLeads>("/api/leads/zombie");
+  },
+  scoreDistribution() {
+    return authedRequest<ScoreDistribution>("/api/leads/score-distribution");
+  },
+  ageing() {
+    return authedRequest<LeadAgeing>("/api/leads/ageing");
   },
 };
 
@@ -387,5 +472,123 @@ export type ReportPreview<T = unknown> = {
 export const reportsApi = {
   preview(reportType: ReportType) {
     return authedRequest<ReportPreview>(`/api/reports/preview?report_type=${reportType}`);
+  },
+};
+
+export type ScoreRing = { value: number; max: number; trend: "up" | "down" | null };
+
+export type ScoreEvidence = { turn: number; t: string; speaker: string; text: string };
+
+export type ScoreDimension = {
+  key: string;
+  label: string;
+  score: number;
+  max: number;
+  note: string;
+  evidence: ScoreEvidence[];
+  status: string;
+};
+
+export type ScriptComplianceEntry = {
+  step: string;
+  status: "followed" | "too_early" | "too_late" | "skipped";
+  note: string;
+};
+
+export type SentimentTimelineSegment = {
+  index: number;
+  t0_sec: number;
+  t1_sec: number;
+  t0: string;
+  label: string;
+  avg_score: number;
+};
+
+export type CallScore = {
+  call_id: string;
+  call_score: number;
+  rings: {
+    overall: ScoreRing;
+    telecaller: ScoreRing;
+    lead_quality: ScoreRing;
+    sentiment: ScoreRing;
+  };
+  verdict: string | null;
+  relevance_reason: string | null;
+  transcript_quality: string;
+  breakdown: ScoreDimension[];
+  script_compliance: ScriptComplianceEntry[];
+  strengths: string[];
+  improvements: string[];
+  sentiment_timeline: { segments: SentimentTimelineSegment[]; caption: string };
+};
+
+export type CallSummary = {
+  headline: string;
+  key_moments: string[];
+  objections_raised: string[];
+  commitments_made: string[];
+  overall_tone: string;
+};
+
+export type LeadAnalysisDetail = {
+  call_id: string;
+  status: string;
+  bant_score: number | null;
+  lead_verdict: string | null;
+  lead_verdict_reason: string | null;
+  relevance_reason: string | null;
+  call_summary: CallSummary | null;
+  key_points: string[];
+  next_action: { recommended_action: string; channel: string; urgency: string } | null;
+};
+
+export type ChatWithCallResponse = {
+  call_id: string;
+  question: string;
+  answer: string;
+};
+
+export const callsApi = {
+  score(callId: string) {
+    return authedRequest<CallScore>(`/api/calls/${callId}/score`);
+  },
+  leadAnalysis(callId: string) {
+    return authedRequest<LeadAnalysisDetail>(`/api/calls/${callId}/lead-analysis`);
+  },
+  chat(callId: string, question: string) {
+    return authedRequest<ChatWithCallResponse>(`/api/calls/${callId}/chat`, {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    });
+  },
+  // Audio needs a Bearer header the browser's <audio src="..."> can't attach on
+  // its own — fetch the bytes ourselves and hand the page an object URL.
+  async fetchAudioBlob(callId: string): Promise<Blob> {
+    const token = getToken();
+    if (!token) throw new ApiError(401, "Not signed in");
+    const res = await fetch(`${API_URL}/api/calls/${callId}/audio`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to load call audio");
+    return res.blob();
+  },
+};
+
+export type CoachingRecommendation = {
+  telecaller_id: string;
+  telecaller_name: string;
+  issue: string;
+  recommended_action: string;
+  priority: "High" | "Medium" | "Low";
+};
+
+export type CoachingQueue = {
+  queue: CoachingRecommendation[];
+};
+
+export const coachingApi = {
+  queue() {
+    return authedRequest<CoachingQueue>("/api/coaching/queue");
   },
 };

@@ -5,8 +5,10 @@ import { Bell, Link2, Megaphone } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { TagInput } from "@/components/ui/TagInput";
-import { ApiError, orgApi, type OrgProfile } from "@/lib/api";
+import { ApiError, authApi, orgApi, type OrgProfile } from "@/lib/api";
+import { updateStoredUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const LANGUAGE_OPTIONS = ["English", "Hindi", "Telugu", "Tamil", "Kannada"];
@@ -37,6 +39,14 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const [pwOpen, setPwOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSubmitting, setPwSubmitting] = useState(false);
+  const [pwSuccess, setPwSuccess] = useState(false);
 
   function load() {
     setLoading(true);
@@ -87,6 +97,36 @@ export default function SettingsPage() {
       setSaveError(e instanceof ApiError ? e.message : "Failed to save changes");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function openChangePassword() {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPwError(null);
+    setPwSuccess(false);
+    setPwOpen(true);
+  }
+
+  async function submitChangePassword() {
+    if (newPassword !== confirmPassword) {
+      setPwError("New password and confirmation don't match");
+      return;
+    }
+    setPwSubmitting(true);
+    setPwError(null);
+    try {
+      const user = await authApi.changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      updateStoredUser({ must_reset_password: user.must_reset_password });
+      setPwSuccess(true);
+    } catch (e) {
+      setPwError(e instanceof ApiError ? e.message : "Failed to change password");
+    } finally {
+      setPwSubmitting(false);
     }
   }
 
@@ -241,6 +281,20 @@ export default function SettingsPage() {
         </Card>
       </div>
 
+      <div className="mt-4 px-4 sm:px-6 lg:px-8">
+        <Card className="p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Account &amp; Security</p>
+              <p className="mt-0.5 text-sm text-slate-500">Change the password for your own login.</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={openChangePassword}>
+              Change Password
+            </Button>
+          </div>
+        </Card>
+      </div>
+
       <div className="mt-4 grid grid-cols-1 gap-4 px-4 sm:px-6 lg:px-8 sm:grid-cols-2">
         {PLACEHOLDER_CARDS.map((c) => (
           <Card key={c.title} className="flex cursor-pointer items-start gap-4 p-5 hover:shadow-md">
@@ -254,6 +308,69 @@ export default function SettingsPage() {
           </Card>
         ))}
       </div>
+
+      <Modal
+        open={pwOpen}
+        onClose={() => setPwOpen(false)}
+        title={pwSuccess ? "Password changed" : "Change Password"}
+        footer={
+          pwSuccess ? (
+            <Button size="sm" className="w-full" onClick={() => setPwOpen(false)}>
+              Done
+            </Button>
+          ) : (
+            <>
+              <Button size="sm" variant="outline" className="flex-1" onClick={() => setPwOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={submitChangePassword}
+                disabled={pwSubmitting || !currentPassword || !newPassword || !confirmPassword}
+              >
+                {pwSubmitting ? "Changing…" : "Change Password"}
+              </Button>
+            </>
+          )
+        }
+      >
+        {pwSuccess ? (
+          <p>Your password has been updated. Use it next time you sign in.</p>
+        ) : (
+          <div className="space-y-3">
+            {pwError && <p className="text-xs font-medium text-red-600">{pwError}</p>}
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Current Password</label>
+              <input
+                type="password"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">New Password</label>
+              <input
+                type="password"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="At least 8 characters"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Confirm New Password</label>
+              <input
+                type="password"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

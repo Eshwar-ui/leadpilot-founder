@@ -31,3 +31,11 @@ export function updateStoredOrgName(orgName: string) {
   if (!user) return;
   localStorage.setItem(USER_KEY, JSON.stringify({ ...user, org_name: orgName }));
 }
+
+// Called after a successful POST /api/auth/change-password so the stored
+// session reflects must_reset_password=false without requiring a re-login.
+export function updateStoredUser(patch: Partial<AuthUser>) {
+  const user = getStoredUser();
+  if (!user) return;
+  localStorage.setItem(USER_KEY, JSON.stringify({ ...user, ...patch }));
+}

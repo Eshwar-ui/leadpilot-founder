@@ -100,12 +100,14 @@ export default function PerformanceMatrixPage() {
                         <span
                           className={cn(
                             "font-mono font-semibold tabular-nums",
-                            t.quality >= 80 ? "text-emerald-600" : t.quality >= 60 ? "text-amber-600" : "text-red-600"
+                            // Thresholds scaled to the same 80%/60%-of-max bar as
+                            // before, now that quality is /110 (5 dims + punctuality).
+                            t.quality >= 88 ? "text-emerald-600" : t.quality >= 66 ? "text-amber-600" : "text-red-600"
                           )}
                         >
                           {t.quality}
                         </span>
-                        <span className="text-slate-400">/100</span>
+                        <span className="text-slate-400">/110</span>
                       </td>
                       <td className="px-5 py-3">
                         {t.trend ? (

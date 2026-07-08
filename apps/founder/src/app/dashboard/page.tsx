@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Filter, Target, BarChart3, CheckCircle2, Phone, Megaphone, Activity, Calendar, Download } from "lucide-react";
+import { Filter, Target, BarChart3, CheckCircle2, Phone, IndianRupee, Trophy, ShieldAlert, Activity, Calendar, Download } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { AlertBanner } from "@/components/ui/AlertBanner";
@@ -12,11 +12,15 @@ import { GoalGauge } from "@/components/charts/GoalGauge";
 import {
   ApiError,
   dashboardApi,
+  insightsApi,
+  leadsQualityApi,
   telecallersApi,
   type ActivityEvent,
   type DashboardGoal,
   type DashboardRevenue,
   type DashboardSnapshot,
+  type Insight,
+  type TeamHealthEntry,
   type TelecallerMetrics,
 } from "@/lib/api";
 import { cn, formatLakhs } from "@/lib/utils";
@@ -26,6 +30,14 @@ const activityToneDot: Record<string, string> = {
   warning: "bg-amber-500",
   info: "bg-blue-500",
   danger: "bg-red-500",
+};
+
+// Matches the PRD's own status legend: 🟢 Active / 🟡 Break / 🔴 Inactive / ⛔ Absent.
+const teamStatusDot: Record<string, string> = {
+  Active: "bg-emerald-500",
+  Break: "bg-amber-500",
+  Inactive: "bg-red-500",
+  Absent: "bg-slate-400",
 };
 
 const REVENUE_RANGES = [1, 7, 30, 90] as const;
@@ -56,6 +68,20 @@ export default function DailySnapshotPage() {
   const [teamAverage, setTeamAverage] = useState<TelecallerMetrics | null>(null);
   const [teamAverageLoading, setTeamAverageLoading] = useState(true);
   const [teamAverageError, setTeamAverageError] = useState<string | null>(null);
+
+  // "Money at Risk" isn't a field the backend computes directly — it's derived
+  // the same way the PRD's own leakage screens estimate it: wasted-lead count
+  // × the average deal value, i.e. "what these leads would be worth if closed
+  // at the team's normal rate."
+  const [wastedCount, setWastedCount] = useState<number | null>(null);
+  const [wastedCountLoading, setWastedCountLoading] = useState(true);
+
+  const [topInsight, setTopInsight] = useState<Insight | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(true);
+
+  const [teamStatus, setTeamStatus] = useState<TeamHealthEntry[]>([]);
+  const [teamStatusLoading, setTeamStatusLoading] = useState(true);
+  const [teamStatusError, setTeamStatusError] = useState<string | null>(null);
 
   function load() {
     setLoading(true);
@@ -107,15 +133,53 @@ export default function DailySnapshotPage() {
       .finally(() => setTeamAverageLoading(false));
   }
 
+  function loadWastedCount() {
+    setWastedCountLoading(true);
+    leadsQualityApi
+      .wastage()
+      .then((res) => setWastedCount(res.total_wasted))
+      .catch(() => setWastedCount(null))
+      .finally(() => setWastedCountLoading(false));
+  }
+
+  function loadTopInsight() {
+    setInsightsLoading(true);
+    const severityRank: Record<Insight["severity"], number> = { high: 0, medium: 1, low: 2 };
+    insightsApi
+      .list()
+      .then((res) => {
+        const sorted = [...res.insights].sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
+        setTopInsight(sorted[0] ?? null);
+      })
+      .catch(() => setTopInsight(null))
+      .finally(() => setInsightsLoading(false));
+  }
+
+  function loadTeamStatus() {
+    setTeamStatusLoading(true);
+    setTeamStatusError(null);
+    telecallersApi
+      .status()
+      .then((res) => setTeamStatus(res.telecallers))
+      .catch((e) => setTeamStatusError(e instanceof ApiError ? e.message : "Failed to load team status"))
+      .finally(() => setTeamStatusLoading(false));
+  }
+
   useEffect(load, []);
   useEffect(() => loadRevenue(range), [range]);
   useEffect(loadGoal, []);
   useEffect(loadTeamAverage, []);
+  useEffect(loadWastedCount, []);
+  useEffect(loadTopInsight, []);
+  useEffect(loadTeamStatus, []);
   useEffect(() => {
     loadActivity();
     const id = setInterval(loadActivity, 30_000);
     return () => clearInterval(id);
   }, []);
+
+  const moneyAtRisk =
+    wastedCount != null && goal?.avg_deal_value != null ? wastedCount * goal.avg_deal_value : null;
 
   return (
     <div className="pb-10">
@@ -134,13 +198,16 @@ export default function DailySnapshotPage() {
         }
       />
 
-      <div className="mt-4 px-4 sm:px-6 lg:px-8">
-        <AlertBanner
-          label="Critical Alert"
-          message="Budget overspend ₹3,200 · Meta Lead Gen campaign +22% over daily cap"
-          cta="Act Now"
-        />
-      </div>
+      {!insightsLoading && topInsight && (
+        <div className="mt-4 px-4 sm:px-6 lg:px-8">
+          <AlertBanner
+            key={topInsight.id}
+            label={topInsight.severity === "high" ? "Critical Alert" : topInsight.severity === "medium" ? "Alert" : "Notice"}
+            message={`${topInsight.title} — ${topInsight.description}`}
+            cta="View Details"
+          />
+        </div>
+      )}
 
       {error && (
         <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -151,7 +218,7 @@ export default function DailySnapshotPage() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-2 gap-4 px-4 sm:px-6 lg:px-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="mt-6 grid grid-cols-2 gap-4 px-4 sm:px-6 lg:px-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-9">
         <StatCard
           label="Total Leads"
           value={loading ? "…" : String(snapshot?.total_leads ?? 0)}
@@ -164,14 +231,30 @@ export default function DailySnapshotPage() {
           value={loading ? "…" : `${snapshot?.conversion_rate_pct ?? 0}%`}
           icon={BarChart3}
         />
+        <StatCard
+          label="Revenue Generated"
+          value={revenueLoading ? "…" : formatLakhs(revenue?.mtd_total ?? 0)}
+          suffix="MTD"
+          icon={IndianRupee}
+        />
         <StatCard label="Leads Today" value={loading ? "…" : String(snapshot?.leads_today ?? 0)} icon={CheckCircle2} />
         <StatCard label="Calls Today" value={loading ? "…" : String(snapshot?.calls_today ?? 0)} icon={Phone} />
-        <StatCard label="Active Campaigns" value="7" icon={Megaphone} />
+        <StatCard
+          label="Closed Deals"
+          value={goalLoading ? "…" : String(goal?.deals_closed ?? 0)}
+          suffix="MTD"
+          icon={Trophy}
+        />
         <StatCard
           label="Team Quality"
           value={teamAverageLoading ? "…" : teamAverageError ? "—" : String(teamAverage?.quality ?? 0)}
-          suffix="/100"
+          suffix="/110"
           icon={Activity}
+        />
+        <StatCard
+          label="Money at Risk"
+          value={wastedCountLoading ? "…" : moneyAtRisk != null ? formatLakhs(moneyAtRisk) : "—"}
+          icon={ShieldAlert}
         />
       </div>
 
@@ -301,6 +384,70 @@ export default function DailySnapshotPage() {
             </div>
           </div>
           {goalError && <p className="mt-3 text-xs text-red-600">{goalError}</p>}
+        </Card>
+      </div>
+
+      <div className="mt-4 px-4 sm:px-6 lg:px-8">
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-0">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <Activity className="size-4 text-primary-600" /> Team Health
+            </h3>
+            <span className="text-xs text-slate-400">
+              Active = calling now · Break ≤15m idle · Inactive &gt;45m idle or logged out · Absent = not logged in
+            </span>
+          </div>
+          {teamStatusError ? (
+            <p className="px-5 py-6 text-sm text-red-600">{teamStatusError}</p>
+          ) : teamStatusLoading ? (
+            <p className="px-5 py-6 text-sm text-slate-400">Loading team status…</p>
+          ) : teamStatus.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-slate-400">No telecallers on this team yet.</p>
+          ) : (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-y border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <th className="px-5 py-2">Telecaller</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Calls</th>
+                    <th className="px-3 py-2">Connected</th>
+                    <th className="px-3 py-2">Closed</th>
+                    <th className="px-3 py-2">Quality</th>
+                    <th className="px-3 py-2">Revenue</th>
+                    <th className="px-3 py-2">Trend</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {teamStatus.map((t) => (
+                    <tr key={t.id}>
+                      <td className="px-5 py-3 font-medium text-slate-900">{t.name}</td>
+                      <td className="px-3 py-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className={cn("size-2 rounded-full", teamStatusDot[t.status])} />
+                          {t.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 font-mono">{t.calls}</td>
+                      <td className="px-3 py-3 font-mono">{t.connected}</td>
+                      <td className="px-3 py-3 font-mono">{t.closed_won}</td>
+                      <td className="px-3 py-3 font-mono">{t.quality}</td>
+                      <td className="px-3 py-3 font-mono">{formatLakhs(t.revenue_today)}</td>
+                      <td className="px-3 py-3">
+                        {t.trend === "up" ? (
+                          <span className="text-emerald-600">↑</span>
+                        ) : t.trend === "down" ? (
+                          <span className="text-red-600">↓</span>
+                        ) : (
+                          <span className="text-slate-300">→</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       </div>
 

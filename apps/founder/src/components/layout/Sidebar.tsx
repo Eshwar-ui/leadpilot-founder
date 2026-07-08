@@ -17,6 +17,7 @@ import {
   FileText,
   Settings,
   X,
+  GraduationCap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ const NAV = [
     items: [
       { label: "Performance Matrix", href: "/dashboard/telecallers/performance", icon: BarChart3 },
       { label: "Comparison", href: "/dashboard/telecallers/comparison", icon: ArrowLeftRight },
+      { label: "Coaching", href: "/dashboard/telecallers/coaching", icon: GraduationCap },
       { label: "Attendance", href: "/dashboard/telecallers/attendance", icon: Clock },
     ],
   },
