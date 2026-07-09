@@ -1,4 +1,4 @@
-import { getToken } from "@/lib/auth";
+import { clearSession, getToken } from "@/lib/auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -47,10 +47,22 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 async function authedRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   if (!token) throw new ApiError(401, "Not signed in");
-  return request<T>(path, {
-    ...options,
-    headers: { Authorization: `Bearer ${token}`, ...options.headers },
-  });
+  try {
+    return await request<T>(path, {
+      ...options,
+      headers: { Authorization: `Bearer ${token}`, ...options.headers },
+    });
+  } catch (err) {
+    // A 401 on an authenticated request means the stored session is dead —
+    // expired, or (as after a DB reseed) pointing at a user that no longer
+    // exists. Clear it and bounce to login instead of letting every dashboard
+    // fetch loop on 401 forever.
+    if (err instanceof ApiError && err.status === 401 && typeof window !== "undefined") {
+      clearSession();
+      if (window.location.pathname !== "/login") window.location.assign("/login");
+    }
+    throw err;
+  }
 }
 
 export const authApi = {
@@ -549,9 +561,44 @@ export type ChatWithCallResponse = {
   answer: string;
 };
 
+export type MemoryFact = {
+  category?: string;
+  text: string;
+  call_index?: number;
+  confidence?: string;
+};
+
+export type MemoryBubble = {
+  contact_key: string;
+  total_calls: number | null;
+  last_call_id: string | null;
+  last_call_at: string | null;
+  facts: MemoryFact[];
+  cumulative_bant: Record<string, { score?: number; note?: string }>;
+  running_verdict: string | null;
+  sentiment_trend: string | null;
+  open_objections: string[];
+  pending_commitments: string[];
+  next_call_strategy: string | null;
+  headline: string | null;
+  updated_at: string | null;
+};
+
 export const callsApi = {
   score(callId: string) {
     return authedRequest<CallScore>(`/api/calls/${callId}/score`);
+  },
+  // Contact's cumulative memory bubble, addressed by a call_id (the backend
+  // derives the contact_key). Returns 404 when the contact has no bubble yet.
+  memory(callId: string) {
+    return authedRequest<MemoryBubble>(`/api/calls/${callId}/memory`);
+  },
+  // Recompute the contact's bubble from all their analysed calls. Returns the
+  // fresh bubble; 404 if the contact has no analysed calls to build from.
+  rebuildMemory(callId: string) {
+    return authedRequest<MemoryBubble>(`/api/calls/${callId}/memory/rebuild`, {
+      method: "POST",
+    });
   },
   leadAnalysis(callId: string) {
     return authedRequest<LeadAnalysisDetail>(`/api/calls/${callId}/lead-analysis`);

@@ -69,6 +69,8 @@ export default function RegisterPage() {
           </label>
           <input
             type="text"
+            name="name"
+            autoComplete="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -83,6 +85,8 @@ export default function RegisterPage() {
           </label>
           <input
             type="email"
+            name="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -98,8 +102,12 @@ export default function RegisterPage() {
           <div className="relative">
             <input
               type={showPassword ? "text" : "password"}
+              name="password"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
               placeholder="••••••••"
               className="w-full rounded-lg border border-slate-200 px-4 py-2.5 pr-10 text-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
             />
@@ -134,6 +142,8 @@ export default function RegisterPage() {
           </label>
           <input
             type={showPassword ? "text" : "password"}
+            name="confirmPassword"
+            autoComplete="new-password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required

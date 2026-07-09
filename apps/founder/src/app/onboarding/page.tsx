@@ -46,25 +46,25 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
 
-  // Step 1 — placeholders until the org-profile fetch below resolves; a
-  // brand-new org (fetch returns all-null fields) keeps these as sensible
-  // defaults rather than blanking the form.
-  const [orgName, setOrgName] = useState("TechCorp India");
-  const [industry, setIndustry] = useState("Real Estate");
-  const [website, setWebsite] = useState("techcorp.in");
-  const [languages, setLanguages] = useState<string[]>(["English", "Hindi"]);
+  // Step 1 — start BLANK for a real new client. These are the org's own
+  // details, not demo data; the draft-prefill effect below restores anything
+  // already saved. Example hints live in each field's `placeholder`.
+  const [orgName, setOrgName] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [website, setWebsite] = useState("");
+  const [languages, setLanguages] = useState<string[]>([]);
 
   // Step 2 — this is the Organisation Knowledge Base every AI feature (scoring
   // relevance, follow-up tone, script generation) reads from, so every field
-  // here needs to actually persist, not just render.
-  const [services, setServices] = useState<string[]>(["Premium Villas", "Commercial Plots"]);
-  const [pricingMin, setPricingMin] = useState("5000000");
-  const [pricingMax, setPricingMax] = useState("50000000");
+  // here needs to actually persist, not just render. Blank by default.
+  const [services, setServices] = useState<string[]>([]);
+  const [pricingMin, setPricingMin] = useState("");
+  const [pricingMax, setPricingMax] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
   const [usps, setUsps] = useState<string[]>([]);
 
-  // Step 3
-  const [brandVoice, setBrandVoice] = useState("Authoritative");
+  // Step 3 — no brand voice pre-selected; the client picks one.
+  const [brandVoice, setBrandVoice] = useState("");
   const [competitors, setCompetitors] = useState<string[]>([]);
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
@@ -74,9 +74,9 @@ export default function OnboardingPage() {
   const [launchError, setLaunchError] = useState<string | null>(null);
 
   // Draft prefill: without this, a mid-wizard refresh (before "Create
-  // Organisation" is hit) silently loses every field back to the hardcoded
-  // placeholders above. Runs once on mount; a brand-new org's all-null
-  // response just leaves the placeholders in place.
+  // Organisation" is hit) silently loses every field the client already typed.
+  // Runs once on mount; a brand-new org's all-null response leaves every field
+  // blank (its initial state), so nothing is ever pre-populated for them.
   useEffect(() => {
     let cancelled = false;
     orgApi
@@ -210,6 +210,9 @@ export default function OnboardingPage() {
                 </Field>
                 <Field label="Industry">
                   <select value={industry} onChange={(e) => setIndustry(e.target.value)} className="input">
+                    <option value="" disabled>
+                      Select your industry…
+                    </option>
                     <option>Real Estate</option>
                     <option>SaaS</option>
                     <option>Financial Services</option>
@@ -373,7 +376,7 @@ export default function OnboardingPage() {
                   <SummaryItem label="Brand Voice" value={brandVoice} />
                 </div>
                 <div className="border-t border-slate-100 px-5 py-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Extracted Services</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Services</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {services.map((s) => (
                       <span key={s} className="rounded-md bg-primary-50 px-3 py-1 text-sm font-medium text-primary-700">
@@ -406,7 +409,14 @@ export default function OnboardingPage() {
               ) : (
                 <span />
               )}
-              <Button onClick={() => setStep((s) => s + 1)}>Continue →</Button>
+              {/* Step 1 needs the org's real name + industry before proceeding —
+                  nothing is pre-filled now, so this stops a blank launch. */}
+              <Button
+                onClick={() => setStep((s) => s + 1)}
+                disabled={step === 1 && (!orgName.trim() || !industry)}
+              >
+                Continue →
+              </Button>
             </div>
           )}
           {step === 4 && (

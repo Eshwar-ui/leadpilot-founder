@@ -2,7 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, Send } from "lucide-react";
+import { ChevronLeft, RefreshCw, Send } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import {
@@ -11,6 +11,7 @@ import {
   type CallScore,
   type ChatWithCallResponse,
   type LeadAnalysisDetail,
+  type MemoryBubble,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +58,11 @@ export default function CallDetailPage({
   const [analysis, setAnalysis] = useState<LeadAnalysisDetail | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(true);
 
+  const [memory, setMemory] = useState<MemoryBubble | null>(null);
+  const [memoryLoading, setMemoryLoading] = useState(true);
+  const [memoryRebuilding, setMemoryRebuilding] = useState(false);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
   const audioUrlRef = useRef<string | null>(null);
@@ -85,8 +91,36 @@ export default function CallDetailPage({
       .finally(() => setAnalysisLoading(false));
   }
 
+  function loadMemory() {
+    setMemoryLoading(true);
+    callsApi
+      .memory(callId)
+      // 404 = this contact has no memory bubble yet; treat as empty, not an error.
+      .then(setMemory)
+      .catch(() => setMemory(null))
+      .finally(() => setMemoryLoading(false));
+  }
+
+  async function handleRebuildMemory() {
+    setMemoryRebuilding(true);
+    setMemoryError(null);
+    try {
+      setMemory(await callsApi.rebuildMemory(callId));
+    } catch (e) {
+      // 404 = no analysed calls to build from, so retrying won't help.
+      setMemoryError(
+        e instanceof ApiError && e.status === 404
+          ? "No analysed calls yet — nothing to rebuild."
+          : "Couldn’t rebuild memory. Try again.",
+      );
+    } finally {
+      setMemoryRebuilding(false);
+    }
+  }
+
   useEffect(loadScore, [callId]);
   useEffect(loadAnalysis, [callId]);
+  useEffect(loadMemory, [callId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -204,6 +238,106 @@ export default function CallDetailPage({
               </div>
               <p className="mt-2 text-xs text-slate-500">{score?.sentiment_timeline.caption}</p>
             </>
+          )}
+        </Card>
+      </div>
+
+      <div className="mt-4 px-4 sm:px-6 lg:px-8">
+        <Card className="p-5">
+          <div className="flex items-center gap-3">
+            <h3 className="text-sm font-semibold text-slate-900">Memory Bubble</h3>
+            {memory?.running_verdict && (
+              <span
+                className={cn(
+                  "rounded-md px-2 py-0.5 text-xs font-medium",
+                  verdictTone[memory.running_verdict] ?? "bg-slate-100 text-slate-500",
+                )}
+              >
+                {memory.running_verdict}
+              </span>
+            )}
+            {typeof memory?.total_calls === "number" && (
+              <span className="text-xs text-slate-400">
+                {memory.total_calls} call{memory.total_calls === 1 ? "" : "s"}
+              </span>
+            )}
+            <Button
+              variant="secondary"
+              className="ml-auto"
+              onClick={handleRebuildMemory}
+              disabled={memoryRebuilding}
+            >
+              <RefreshCw className={cn("size-4", memoryRebuilding && "animate-spin")} />
+              {memoryRebuilding ? "Rebuilding…" : "Rebuild"}
+            </Button>
+          </div>
+          {memoryError && <p className="mt-2 text-xs text-red-600">{memoryError}</p>}
+          {memoryLoading ? (
+            <p className="mt-3 text-sm text-slate-400">Loading memory…</p>
+          ) : !memory ? (
+            <p className="mt-3 text-sm text-slate-400">
+              No cumulative memory for this contact yet.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-4 text-sm">
+              {memory.headline && (
+                <p className="font-medium text-slate-800">{memory.headline}</p>
+              )}
+
+              {memory.facts.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Known facts
+                  </p>
+                  <ul className="mt-1 list-inside list-disc space-y-1 text-slate-600">
+                    {memory.facts.map((f, i) => (
+                      <li key={i}>
+                        {f.text}
+                        {f.category && (
+                          <span className="ml-1 text-xs text-slate-400">({f.category})</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {memory.open_objections.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Open objections
+                    </p>
+                    <ul className="mt-1 list-inside list-disc space-y-1 text-slate-600">
+                      {memory.open_objections.map((o, i) => (
+                        <li key={i}>{o}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {memory.pending_commitments.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Pending commitments
+                    </p>
+                    <ul className="mt-1 list-inside list-disc space-y-1 text-slate-600">
+                      {memory.pending_commitments.map((c, i) => (
+                        <li key={i}>{c}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {memory.next_call_strategy && (
+                <div className="rounded-md bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Next-call strategy
+                  </p>
+                  <p className="mt-1 text-slate-700">{memory.next_call_strategy}</p>
+                </div>
+              )}
+            </div>
           )}
         </Card>
       </div>

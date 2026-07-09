@@ -83,6 +83,18 @@ export default function DailySnapshotPage() {
   const [teamStatusLoading, setTeamStatusLoading] = useState(true);
   const [teamStatusError, setTeamStatusError] = useState<string | null>(null);
 
+  // Real month-to-date range for the header. Was a hardcoded "01/01/2026 –
+  // 30/01/2026" that filtered nothing and read as stale/wrong on any other
+  // date. Computed on the client (empty on first render) so SSR and hydration
+  // agree. The snapshot/goal stats are all MTD, so this just labels that.
+  const [dateLabel, setDateLabel] = useState("");
+  useEffect(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+    setDateLabel(`${fmt(monthStart)} – ${fmt(now)} ${now.getFullYear()}`);
+  }, []);
+
   function load() {
     setLoading(true);
     setError(null);
@@ -187,8 +199,8 @@ export default function DailySnapshotPage() {
         title="Daily Snapshot"
         action={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
-              <Calendar className="size-3.5" /> 01/01/2026 – 30/01/2026
+            <Button variant="outline" size="sm" title="Month-to-date — all snapshot figures are for the current month">
+              <Calendar className="size-3.5" /> {dateLabel || "This month"}
             </Button>
             <Button variant="outline" size="sm">Filter</Button>
             <Button variant="outline" size="sm">
