@@ -1,8 +1,8 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, Sparkles, Download, Calendar } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -35,8 +35,16 @@ const verdictTone: Record<string, string> = {
   Junk: "bg-red-50 text-red-600",
 };
 
-export default function TelecallerProfilePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function TelecallerProfilePage() {
+  return (
+    <Suspense fallback={<p className="mt-10 text-center text-sm text-slate-400">Loading…</p>}>
+      <TelecallerProfileContent />
+    </Suspense>
+  );
+}
+
+function TelecallerProfileContent() {
+  const id = useSearchParams().get("id") ?? "";
   const router = useRouter();
   const [detail, setDetail] = useState<TelecallerPerformanceDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -130,7 +138,7 @@ export default function TelecallerProfilePage({ params }: { params: Promise<{ id
                   detail.best_calls.map((c) => (
                     <Link
                       key={c.call_id}
-                      href={`/dashboard/telecallers/performance/${id}/calls/${c.call_id}`}
+                      href={`/dashboard/telecallers/performance/detail/calls?id=${id}&callId=${c.call_id}`}
                       className="flex items-center justify-between py-2.5 text-sm hover:bg-slate-50"
                     >
                       <span className="text-slate-600">
@@ -159,7 +167,7 @@ export default function TelecallerProfilePage({ params }: { params: Promise<{ id
                   detail.needs_review.map((c) => (
                     <Link
                       key={c.call_id}
-                      href={`/dashboard/telecallers/performance/${id}/calls/${c.call_id}`}
+                      href={`/dashboard/telecallers/performance/detail/calls?id=${id}&callId=${c.call_id}`}
                       className="flex items-center justify-between py-2.5 text-sm hover:bg-slate-50"
                     >
                       <span className="text-slate-600">
@@ -194,7 +202,7 @@ export default function TelecallerProfilePage({ params }: { params: Promise<{ id
                   detail.timeline.map((c) => (
                     <Link
                       key={c.call_id}
-                      href={`/dashboard/telecallers/performance/${id}/calls/${c.call_id}`}
+                      href={`/dashboard/telecallers/performance/detail/calls?id=${id}&callId=${c.call_id}`}
                       className="flex items-center justify-between px-5 py-3 text-sm hover:bg-slate-50"
                     >
                       <div className="flex items-center gap-4">

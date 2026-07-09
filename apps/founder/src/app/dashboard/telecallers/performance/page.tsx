@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Sparkline } from "@/components/charts/Sparkline";
+import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { ApiError, telecallersApi, type TelecallerPerformance } from "@/lib/api";
 import { formatSeconds, cn } from "@/lib/utils";
 
@@ -58,9 +59,7 @@ export default function PerformanceMatrixPage() {
       )}
 
       <div className="mt-4 px-4 sm:px-6 lg:px-8">
-        {loading ? (
-          <p className="py-10 text-center text-sm text-slate-400">Loading team performance…</p>
-        ) : telecallers.length === 0 && !error ? (
+        {!loading && telecallers.length === 0 && !error ? (
           <p className="py-10 text-center text-sm text-slate-400">
             No telecallers yet. Invite one from Manage Team to see their performance here.
           </p>
@@ -81,10 +80,19 @@ export default function PerformanceMatrixPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {telecallers.map((t) => (
+                  {loading ? (
+                    <>
+                      <SkeletonTableRow columns={8} />
+                      <SkeletonTableRow columns={8} />
+                      <SkeletonTableRow columns={8} />
+                      <SkeletonTableRow columns={8} />
+                      <SkeletonTableRow columns={8} />
+                    </>
+                  ) : (
+                  telecallers.map((t) => (
                     <tr key={t.id} className="hover:bg-slate-50">
                       <td className="px-5 py-3">
-                        <Link href={`/dashboard/telecallers/performance/${t.id}`} className="flex items-center gap-2.5">
+                        <Link href={`/dashboard/telecallers/performance/detail?id=${t.id}`} className="flex items-center gap-2.5">
                           <span className="flex size-8 items-center justify-center rounded-full bg-primary-50 text-xs font-semibold text-primary-700">
                             {initials(t.name)}
                           </span>
@@ -117,7 +125,8 @@ export default function PerformanceMatrixPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                  ))
+                  )}
                 </tbody>
               </table>
             </div>

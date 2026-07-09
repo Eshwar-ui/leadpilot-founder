@@ -1,0 +1,9 @@
+{
+  "hosting": {
+    "site": "lead-pilot",
+    "public": "apps/founder/out",
+    "cleanUrls": true,
+    "trailingSlash": false,
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+  }
+}

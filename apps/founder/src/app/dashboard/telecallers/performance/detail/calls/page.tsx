@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ChevronLeft, RefreshCw, Send } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -44,12 +45,18 @@ const sentimentDot: Record<string, string> = {
 
 type ChatEntry = { question: string; answer: string };
 
-export default function CallDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string; callId: string }>;
-}) {
-  const { id, callId } = use(params);
+export default function CallDetailPage() {
+  return (
+    <Suspense fallback={<p className="mt-10 text-center text-sm text-slate-400">Loading…</p>}>
+      <CallDetailContent />
+    </Suspense>
+  );
+}
+
+function CallDetailContent() {
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id") ?? "";
+  const callId = searchParams.get("callId") ?? "";
 
   const [score, setScore] = useState<CallScore | null>(null);
   const [scoreLoading, setScoreLoading] = useState(true);
@@ -160,7 +167,7 @@ export default function CallDetailPage({
     <div className="pb-10">
       <div className="px-4 sm:px-6 lg:px-8 pt-6">
         <Link
-          href={`/dashboard/telecallers/performance/${id}`}
+          href={`/dashboard/telecallers/performance/detail?id=${id}`}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
         >
           <ChevronLeft className="size-4" /> Back to Telecaller Profile
