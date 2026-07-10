@@ -1,4 +1,5 @@
 import { clearSession, getToken } from "@/lib/auth";
+import { markReachable, markUnreachable } from "@/lib/connectivity";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -27,13 +28,31 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+  } catch (err) {
+    // fetch throws (not a rejected-with-status response) on DNS failure,
+    // connection refused, CORS block, or timeout — i.e. the server itself is
+    // unreachable, not just this one request failing. Feeds the global
+    // <ConnectivityBanner>.
+    markUnreachable();
+    throw new ApiError(0, "Can't reach the server. Check your connection and try again.");
+  }
+
+  // Any response at all — even a 4xx application error — proves the server
+  // is up; only 5xx counts as a server-side connectivity issue.
+  if (res.status >= 500) {
+    markUnreachable();
+  } else {
+    markReachable();
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);
