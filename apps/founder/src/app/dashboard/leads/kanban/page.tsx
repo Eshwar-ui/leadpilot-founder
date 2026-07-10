@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { SkeletonKanbanColumn, SkeletonStatCard } from "@/components/ui/Skeleton";
 import { ApiError, leadsApi, type BoardLead } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Clock, AlertTriangle } from "lucide-react";
@@ -169,9 +170,19 @@ export default function KanbanBoardPage() {
       />
 
       <div className="mt-4 grid grid-cols-1 gap-4 px-4 sm:px-6 lg:px-8 sm:grid-cols-3">
-        <StatCard label="Stale Leads (5+ days)" value={String(staleCount)} tone={staleCount > 0 ? "danger" : "default"} icon={Clock} />
-        <StatCard label="Overdue (48h+)" value={String(overdueCount)} tone={overdueCount > 0 ? "danger" : "default"} icon={AlertTriangle} />
-        <StatCard label="Avg Days Stuck" value={`${avgDaysStuck}d`} icon={Clock} />
+        {loading ? (
+          <>
+            <SkeletonStatCard />
+            <SkeletonStatCard />
+            <SkeletonStatCard />
+          </>
+        ) : (
+          <>
+            <StatCard label="Stale Leads (5+ days)" value={String(staleCount)} tone={staleCount > 0 ? "danger" : "default"} icon={Clock} />
+            <StatCard label="Overdue (48h+)" value={String(overdueCount)} tone={overdueCount > 0 ? "danger" : "default"} icon={AlertTriangle} />
+            <StatCard label="Avg Days Stuck" value={`${avgDaysStuck}d`} icon={Clock} />
+          </>
+        )}
       </div>
 
       {error && (
@@ -184,7 +195,13 @@ export default function KanbanBoardPage() {
       )}
 
       {loading ? (
-        <p className="mt-6 px-4 text-center text-sm text-slate-400 sm:px-6 lg:px-8">Loading leads…</p>
+        <div className="mt-4 overflow-x-auto px-4 sm:px-6 lg:px-8 pb-2">
+          <div className="flex gap-3" style={{ width: "max-content" }}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <SkeletonKanbanColumn key={i} />
+            ))}
+          </div>
+        </div>
       ) : leads.length === 0 && !error ? (
         <p className="mt-6 px-4 text-center text-sm text-slate-400 sm:px-6 lg:px-8">
           No leads yet. Add one above, or leads created via the mobile app will show up here.

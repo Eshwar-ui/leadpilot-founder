@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { StatCard } from "@/components/ui/StatCard";
 import { ProgressBar } from "@/components/ui/ProgressBar";
+import { SkeletonStatCard, SkeletonTableRow } from "@/components/ui/Skeleton";
 import { ApiError, teamApi, type TeamMember } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -157,9 +158,19 @@ export default function ManageTeamPage() {
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 px-4 sm:px-6 lg:px-8 sm:grid-cols-3">
-        <StatCard label="Total Members" value={String(members.length)} suffix="Managed" />
-        <StatCard label="Active" value={String(activeCount)} suffix="Enabled" />
-        <StatCard label="Inactive" value={String(inactiveCount)} suffix="Disabled" />
+        {loading ? (
+          <>
+            <SkeletonStatCard />
+            <SkeletonStatCard />
+            <SkeletonStatCard />
+          </>
+        ) : (
+          <>
+            <StatCard label="Total Members" value={String(members.length)} suffix="Managed" />
+            <StatCard label="Active" value={String(activeCount)} suffix="Enabled" />
+            <StatCard label="Inactive" value={String(inactiveCount)} suffix="Disabled" />
+          </>
+        )}
       </div>
 
       <div className="mt-4 px-4 sm:px-6 lg:px-8">
@@ -172,9 +183,7 @@ export default function ManageTeamPage() {
               </button>
             </div>
           )}
-          {loading ? (
-            <div className="px-5 py-10 text-center text-sm text-slate-400">Loading team…</div>
-          ) : filtered.length === 0 ? (
+          {!loading && filtered.length === 0 ? (
             <div className="px-5 py-10 text-center text-sm text-slate-400">
               No team members yet. Invite your first member to get started.
             </div>
@@ -194,7 +203,15 @@ export default function ManageTeamPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtered.map((m) => (
+                  {loading ? (
+                    <>
+                      <SkeletonTableRow columns={8} />
+                      <SkeletonTableRow columns={8} />
+                      <SkeletonTableRow columns={8} />
+                      <SkeletonTableRow columns={8} />
+                    </>
+                  ) : (
+                  filtered.map((m) => (
                     <tr key={m.id}>
                       <td className="px-5 py-3">
                         <p className="font-semibold text-slate-900">{m.name}</p>
@@ -238,7 +255,8 @@ export default function ManageTeamPage() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                  ))
+                  )}
                 </tbody>
               </table>
             </div>

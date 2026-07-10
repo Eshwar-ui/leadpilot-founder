@@ -7,6 +7,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { AlertBanner } from "@/components/ui/AlertBanner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Skeleton, SkeletonTableRow } from "@/components/ui/Skeleton";
 import { RevenueChart } from "@/components/charts/RevenueChart";
 import { GoalGauge } from "@/components/charts/GoalGauge";
 import {
@@ -233,39 +234,39 @@ export default function DailySnapshotPage() {
       <div className="mt-6 grid grid-cols-2 gap-4 px-4 sm:px-6 lg:px-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-9">
         <StatCard
           label="Total Leads"
-          value={loading ? "…" : String(snapshot?.total_leads ?? 0)}
+          value={loading ? <Skeleton className="h-6 w-12" /> : String(snapshot?.total_leads ?? 0)}
           suffix="MTD"
           icon={Filter}
         />
-        <StatCard label="Hot Leads" value={loading ? "…" : String(snapshot?.hot_leads ?? 0)} icon={Target} />
+        <StatCard label="Hot Leads" value={loading ? <Skeleton className="h-6 w-12" /> : String(snapshot?.hot_leads ?? 0)} icon={Target} />
         <StatCard
           label="Conversion Rate"
-          value={loading ? "…" : `${snapshot?.conversion_rate_pct ?? 0}%`}
+          value={loading ? <Skeleton className="h-6 w-12" /> : `${snapshot?.conversion_rate_pct ?? 0}%`}
           icon={BarChart3}
         />
         <StatCard
           label="Revenue Generated"
-          value={revenueLoading ? "…" : formatLakhs(revenue?.mtd_total ?? 0)}
+          value={revenueLoading ? <Skeleton className="h-6 w-16" /> : formatLakhs(revenue?.mtd_total ?? 0)}
           suffix="MTD"
           icon={IndianRupee}
         />
-        <StatCard label="Leads Today" value={loading ? "…" : String(snapshot?.leads_today ?? 0)} icon={CheckCircle2} />
-        <StatCard label="Calls Today" value={loading ? "…" : String(snapshot?.calls_today ?? 0)} icon={Phone} />
+        <StatCard label="Leads Today" value={loading ? <Skeleton className="h-6 w-12" /> : String(snapshot?.leads_today ?? 0)} icon={CheckCircle2} />
+        <StatCard label="Calls Today" value={loading ? <Skeleton className="h-6 w-12" /> : String(snapshot?.calls_today ?? 0)} icon={Phone} />
         <StatCard
           label="Closed Deals"
-          value={goalLoading ? "…" : String(goal?.deals_closed ?? 0)}
+          value={goalLoading ? <Skeleton className="h-6 w-12" /> : String(goal?.deals_closed ?? 0)}
           suffix="MTD"
           icon={Trophy}
         />
         <StatCard
           label="Team Quality"
-          value={teamAverageLoading ? "…" : teamAverageError ? "—" : String(teamAverage?.quality ?? 0)}
+          value={teamAverageLoading ? <Skeleton className="h-6 w-12" /> : teamAverageError ? "—" : String(teamAverage?.quality ?? 0)}
           suffix="/110"
           icon={Activity}
         />
         <StatCard
           label="Money at Risk"
-          value={wastedCountLoading ? "…" : moneyAtRisk != null ? formatLakhs(moneyAtRisk) : "—"}
+          value={wastedCountLoading ? <Skeleton className="h-6 w-16" /> : moneyAtRisk != null ? formatLakhs(moneyAtRisk) : "—"}
           icon={ShieldAlert}
         />
       </div>
@@ -277,8 +278,8 @@ export default function DailySnapshotPage() {
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Revenue — {range === 1 ? "Today" : `${range} Days`}
               </h3>
-              <p className="mt-1 font-mono text-2xl font-bold text-primary-600">
-                {revenueLoading ? "…" : formatLakhs(revenue?.mtd_total ?? 0)}{" "}
+              <p className="mt-1 flex items-baseline gap-1 font-mono text-2xl font-bold text-primary-600">
+                {revenueLoading ? <Skeleton className="h-7 w-20" /> : formatLakhs(revenue?.mtd_total ?? 0)}{" "}
                 <span className="text-sm font-medium text-slate-400">MTD</span>
               </p>
               {revenue?.pct_change_vs_last_month != null ? (
@@ -299,13 +300,13 @@ export default function DailySnapshotPage() {
               <div>
                 <p className="text-[10px] font-semibold uppercase text-slate-400">Avg / Day</p>
                 <p className="font-mono text-sm font-bold text-slate-900">
-                  {revenueLoading ? "…" : formatLakhs(revenue?.avg_per_day ?? 0)}
+                  {revenueLoading ? <Skeleton className="h-4 w-14" /> : formatLakhs(revenue?.avg_per_day ?? 0)}
                 </p>
               </div>
               <div>
                 <p className="text-[10px] font-semibold uppercase text-slate-400">Best Day</p>
                 <p className="font-mono text-sm font-bold text-emerald-600">
-                  {revenueLoading ? "…" : formatLakhs(revenue?.best_day?.revenue ?? 0)}
+                  {revenueLoading ? <Skeleton className="h-4 w-14" /> : formatLakhs(revenue?.best_day?.revenue ?? 0)}
                 </p>
               </div>
               <div className="flex rounded-lg border border-slate-200 p-0.5 text-xs">
@@ -327,6 +328,8 @@ export default function DailySnapshotPage() {
           <div className="px-2 pb-2">
             {revenueError ? (
               <p className="px-3 py-10 text-center text-sm text-red-600">{revenueError}</p>
+            ) : revenueLoading ? (
+              <Skeleton className="h-56 w-full rounded-xl" />
             ) : (
               <RevenueChart data={revenue?.series ?? []} targetPerDay={revenue?.target_per_day ?? null} />
             )}
@@ -358,7 +361,7 @@ export default function DailySnapshotPage() {
             <GoalGauge pct={goal?.pct_of_target ?? 0} />
             <div className="absolute inset-x-0 top-[52%] flex flex-col items-center">
               <span className="font-mono text-3xl font-bold text-slate-900">
-                {goalLoading ? "…" : goal?.pct_of_target != null ? `${goal.pct_of_target}%` : "—"}
+                {goalLoading ? <Skeleton className="h-8 w-16" /> : goal?.pct_of_target != null ? `${goal.pct_of_target}%` : "—"}
               </span>
               <span className="text-xs text-slate-400">of monthly target</span>
             </div>
@@ -368,30 +371,32 @@ export default function DailySnapshotPage() {
             <span>{goal?.monthly_target != null ? formatLakhs(goal.monthly_target) : "No target set"}</span>
           </div>
           <p className="text-center font-mono text-sm font-semibold text-slate-700">
-            {goalLoading
-              ? "…"
-              : `${formatLakhs(goal?.mtd_revenue ?? 0)} / ${goal?.monthly_target != null ? formatLakhs(goal.monthly_target) : "—"}`}
+            {goalLoading ? (
+              <Skeleton className="mx-auto h-4 w-32" />
+            ) : (
+              `${formatLakhs(goal?.mtd_revenue ?? 0)} / ${goal?.monthly_target != null ? formatLakhs(goal.monthly_target) : "—"}`
+            )}
           </p>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-lg bg-slate-50 p-3">
               <p className="text-[10px] font-semibold uppercase text-slate-400">Days Left</p>
-              <p className="font-mono text-lg font-bold text-amber-600">{goalLoading ? "…" : goal?.days_left ?? 0}</p>
+              <p className="font-mono text-lg font-bold text-amber-600">{goalLoading ? <Skeleton className="h-5 w-8" /> : goal?.days_left ?? 0}</p>
             </div>
             <div className="rounded-lg bg-slate-50 p-3">
               <p className="text-[10px] font-semibold uppercase text-slate-400">Needed/Day</p>
               <p className="font-mono text-lg font-bold text-slate-900">
-                {goalLoading ? "…" : goal?.needed_per_day != null ? formatLakhs(goal.needed_per_day) : "—"}
+                {goalLoading ? <Skeleton className="h-5 w-14" /> : goal?.needed_per_day != null ? formatLakhs(goal.needed_per_day) : "—"}
               </p>
             </div>
             <div className="rounded-lg bg-slate-50 p-3">
               <p className="text-[10px] font-semibold uppercase text-slate-400">Deals Closed</p>
-              <p className="font-mono text-lg font-bold text-emerald-600">{goalLoading ? "…" : goal?.deals_closed ?? 0}</p>
+              <p className="font-mono text-lg font-bold text-emerald-600">{goalLoading ? <Skeleton className="h-5 w-8" /> : goal?.deals_closed ?? 0}</p>
             </div>
             <div className="rounded-lg bg-slate-50 p-3">
               <p className="text-[10px] font-semibold uppercase text-slate-400">Avg Deal</p>
               <p className="font-mono text-lg font-bold text-slate-900">
-                {goalLoading ? "…" : goal?.avg_deal_value != null ? formatLakhs(goal.avg_deal_value) : "—"}
+                {goalLoading ? <Skeleton className="h-5 w-14" /> : goal?.avg_deal_value != null ? formatLakhs(goal.avg_deal_value) : "—"}
               </p>
             </div>
           </div>
@@ -411,9 +416,7 @@ export default function DailySnapshotPage() {
           </div>
           {teamStatusError ? (
             <p className="px-5 py-6 text-sm text-red-600">{teamStatusError}</p>
-          ) : teamStatusLoading ? (
-            <p className="px-5 py-6 text-sm text-slate-400">Loading team status…</p>
-          ) : teamStatus.length === 0 ? (
+          ) : !teamStatusLoading && teamStatus.length === 0 ? (
             <p className="px-5 py-6 text-sm text-slate-400">No telecallers on this team yet.</p>
           ) : (
             <div className="mt-3 overflow-x-auto">
@@ -431,31 +434,39 @@ export default function DailySnapshotPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {teamStatus.map((t) => (
-                    <tr key={t.id}>
-                      <td className="px-5 py-3 font-medium text-slate-900">{t.name}</td>
-                      <td className="px-3 py-3">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className={cn("size-2 rounded-full", teamStatusDot[t.status])} />
-                          {t.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 font-mono">{t.calls}</td>
-                      <td className="px-3 py-3 font-mono">{t.connected}</td>
-                      <td className="px-3 py-3 font-mono">{t.closed_won}</td>
-                      <td className="px-3 py-3 font-mono">{t.quality}</td>
-                      <td className="px-3 py-3 font-mono">{formatLakhs(t.revenue_today)}</td>
-                      <td className="px-3 py-3">
-                        {t.trend === "up" ? (
-                          <span className="text-emerald-600">↑</span>
-                        ) : t.trend === "down" ? (
-                          <span className="text-red-600">↓</span>
-                        ) : (
-                          <span className="text-slate-300">→</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {teamStatusLoading ? (
+                    <>
+                      <SkeletonTableRow columns={8} />
+                      <SkeletonTableRow columns={8} />
+                      <SkeletonTableRow columns={8} />
+                    </>
+                  ) : (
+                    teamStatus.map((t) => (
+                      <tr key={t.id}>
+                        <td className="px-5 py-3 font-medium text-slate-900">{t.name}</td>
+                        <td className="px-3 py-3">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className={cn("size-2 rounded-full", teamStatusDot[t.status])} />
+                            {t.status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 font-mono">{t.calls}</td>
+                        <td className="px-3 py-3 font-mono">{t.connected}</td>
+                        <td className="px-3 py-3 font-mono">{t.closed_won}</td>
+                        <td className="px-3 py-3 font-mono">{t.quality}</td>
+                        <td className="px-3 py-3 font-mono">{formatLakhs(t.revenue_today)}</td>
+                        <td className="px-3 py-3">
+                          {t.trend === "up" ? (
+                            <span className="text-emerald-600">↑</span>
+                          ) : t.trend === "down" ? (
+                            <span className="text-red-600">↓</span>
+                          ) : (
+                            <span className="text-slate-300">→</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -476,7 +487,15 @@ export default function DailySnapshotPage() {
           {activityError ? (
             <p className="px-5 py-6 text-sm text-red-600">{activityError}</p>
           ) : activityLoading ? (
-            <p className="px-5 py-6 text-sm text-slate-400">Loading activity…</p>
+            <div className="mt-3 divide-y divide-slate-100">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-5 py-3">
+                  <Skeleton className="h-3 w-10" />
+                  <Skeleton className="size-2 rounded-full" />
+                  <Skeleton className="h-4 w-64" />
+                </div>
+              ))}
+            </div>
           ) : activity.length === 0 ? (
             <p className="px-5 py-6 text-sm text-slate-400">No recent activity yet.</p>
           ) : (
