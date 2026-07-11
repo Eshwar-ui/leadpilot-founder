@@ -93,6 +93,10 @@ export default function SettingsPage() {
       });
       setProfile(updated);
       setSaved(true);
+      // Revert the button back to "Save Changes" after a beat so it reads as a
+      // transient confirmation, not a stuck state. Editing any field also
+      // clears it (see update()).
+      window.setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       setSaveError(e instanceof ApiError ? e.message : "Failed to save changes");
     } finally {
@@ -297,12 +301,17 @@ export default function SettingsPage() {
 
       <div className="mt-4 grid grid-cols-1 gap-4 px-4 sm:px-6 lg:px-8 sm:grid-cols-2">
         {PLACEHOLDER_CARDS.map((c) => (
-          <Card key={c.title} className="flex cursor-pointer items-start gap-4 p-5 hover:shadow-md">
-            <span className="flex size-10 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+          <Card key={c.title} className="flex items-start gap-4 p-5">
+            <span className="flex size-10 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
               <c.icon className="size-5" />
             </span>
             <div>
-              <p className="text-sm font-semibold text-slate-900">{c.title}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-slate-900">{c.title}</p>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Coming soon
+                </span>
+              </div>
               <p className="mt-0.5 text-sm text-slate-500">{c.description}</p>
             </div>
           </Card>

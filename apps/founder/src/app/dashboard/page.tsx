@@ -83,6 +83,9 @@ export default function DailySnapshotPage() {
   const [teamStatus, setTeamStatus] = useState<TeamHealthEntry[]>([]);
   const [teamStatusLoading, setTeamStatusLoading] = useState(true);
   const [teamStatusError, setTeamStatusError] = useState<string | null>(null);
+  // Status filter for the Team Health table — the one dimension on this
+  // (month-to-date) page that can actually be filtered client-side.
+  const [statusFilter, setStatusFilter] = useState("all");
 
   // Real month-to-date range for the header. Was a hardcoded "01/01/2026 –
   // 30/01/2026" that filtered nothing and read as stale/wrong on any other
@@ -194,17 +197,54 @@ export default function DailySnapshotPage() {
   const moneyAtRisk =
     wastedCount != null && goal?.avg_deal_value != null ? wastedCount * goal.avg_deal_value : null;
 
+  const visibleTeamStatus =
+    statusFilter === "all" ? teamStatus : teamStatus.filter((t) => t.status === statusFilter);
+
+  function exportSnapshotCsv() {
+    const header = ["Telecaller", "Status", "Calls", "Connected", "Closed", "Quality", "Revenue Today", "Trend"];
+    const escape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const rows = visibleTeamStatus.map((t) =>
+      [t.name, t.status, t.calls, t.connected, t.closed_won, t.quality, t.revenue_today, t.trend]
+        .map((c) => escape(String(c)))
+        .join(",")
+    );
+    const blob = new Blob([[header.join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "team-health-snapshot.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="pb-10">
       <PageHeader
         title="Daily Snapshot"
         action={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" title="Month-to-date — all snapshot figures are for the current month">
+            <span
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500"
+              title="All snapshot figures are month-to-date"
+            >
               <Calendar className="size-3.5" /> {dateLabel || "This month"}
-            </Button>
-            <Button variant="outline" size="sm">Filter</Button>
-            <Button variant="outline" size="sm">
+            </span>
+            <label className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600">
+              <Filter className="size-3.5 text-slate-400" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                aria-label="Filter team health by status"
+                className="bg-transparent text-xs font-medium text-slate-600 focus:outline-none"
+              >
+                <option value="all">All statuses</option>
+                <option value="Active">Active</option>
+                <option value="Break">Break</option>
+                <option value="Inactive">Inactive</option>
+                <option value="Absent">Absent</option>
+              </select>
+            </label>
+            <Button variant="outline" size="sm" onClick={exportSnapshotCsv}>
               <Download className="size-3.5" /> Export
             </Button>
           </div>
@@ -418,6 +458,8 @@ export default function DailySnapshotPage() {
             <p className="px-5 py-6 text-sm text-red-600">{teamStatusError}</p>
           ) : !teamStatusLoading && teamStatus.length === 0 ? (
             <p className="px-5 py-6 text-sm text-slate-400">No telecallers on this team yet.</p>
+          ) : !teamStatusLoading && visibleTeamStatus.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-slate-400">No telecallers with status “{statusFilter}” right now.</p>
           ) : (
             <div className="mt-3 overflow-x-auto">
               <table className="w-full text-sm">
@@ -441,7 +483,7 @@ export default function DailySnapshotPage() {
                       <SkeletonTableRow columns={8} />
                     </>
                   ) : (
-                    teamStatus.map((t) => (
+                    visibleTeamStatus.map((t) => (
                       <tr key={t.id}>
                         <td className="px-5 py-3 font-medium text-slate-900">{t.name}</td>
                         <td className="px-3 py-3">

@@ -133,13 +133,123 @@ export default function ReportGeneratorPage() {
             ) : !preview ? (
               <p className="py-6 text-center text-sm text-slate-400">No preview generated yet.</p>
             ) : (
-              <pre className="max-h-80 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">
-                {JSON.stringify(preview.data, null, 2)}
-              </pre>
+              <div className="max-h-[28rem] overflow-auto pr-1">
+                <ReportView data={preview.data} />
+              </div>
             )}
           </div>
         </Card>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Report renderer — turns the backend's report `data` object into a readable
+// layout (stat tiles for scalars, tables for arrays of rows, subsections for
+// nested objects) instead of dumping raw JSON. Shape-agnostic so it renders
+// all three report types without per-type field mapping.
+// ---------------------------------------------------------------------------
+
+function humanize(key: string) {
+  return key
+    .replace(/_/g, " ")
+    .replace(/\bpct\b/gi, "%")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatScalar(value: unknown) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "number") return value.toLocaleString("en-IN");
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function ScalarGrid({ entries }: { entries: [string, unknown][] }) {
+  if (entries.length === 0) return null;
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {entries.map(([k, v]) => (
+        <div key={k} className="rounded-lg bg-slate-50 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{humanize(k)}</p>
+          <p className="mt-0.5 font-mono text-sm font-bold text-slate-900">{formatScalar(v)}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RowsTable({ rows }: { rows: Record<string, unknown>[] }) {
+  // Union of scalar keys across rows, in first-seen order (nested cells skipped).
+  const columns: string[] = [];
+  for (const row of rows) {
+    for (const k of Object.keys(row)) {
+      if (!columns.includes(k) && !isPlainObject(row[k]) && !Array.isArray(row[k])) columns.push(k);
+    }
+  }
+  return (
+    <div className="overflow-x-auto rounded-lg border border-slate-100">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-slate-100 bg-slate-50 text-left font-semibold uppercase tracking-wide text-slate-400">
+            {columns.map((c) => (
+              <th key={c} className="px-3 py-2">{humanize(c)}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map((row, i) => (
+            <tr key={i}>
+              {columns.map((c) => (
+                <td key={c} className="px-3 py-2 font-mono text-slate-700">{formatScalar(row[c])}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ReportView({ data, level = 0 }: { data: unknown; level?: number }) {
+  if (!isPlainObject(data)) {
+    return <p className="text-sm text-slate-600">{formatScalar(data)}</p>;
+  }
+
+  const scalarEntries: [string, unknown][] = [];
+  const complexEntries: [string, unknown][] = [];
+  for (const [k, v] of Object.entries(data)) {
+    if (isPlainObject(v) || Array.isArray(v)) complexEntries.push([k, v]);
+    else scalarEntries.push([k, v]);
+  }
+
+  const Heading = level === 0 ? "h4" : "h5";
+
+  return (
+    <div className="space-y-4">
+      <ScalarGrid entries={scalarEntries} />
+      {complexEntries.map(([k, v]) => (
+        <div key={k} className="space-y-2">
+          <Heading className="text-xs font-semibold uppercase tracking-wide text-slate-500">{humanize(k)}</Heading>
+          {Array.isArray(v) ? (
+            v.length === 0 ? (
+              <p className="text-xs text-slate-400">None.</p>
+            ) : isPlainObject(v[0]) ? (
+              <RowsTable rows={v as Record<string, unknown>[]} />
+            ) : (
+              <p className="text-sm text-slate-600">{(v as unknown[]).map(formatScalar).join(", ")}</p>
+            )
+          ) : (
+            <div className="rounded-lg bg-slate-50 p-3">
+              <ReportView data={v} level={level + 1} />
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

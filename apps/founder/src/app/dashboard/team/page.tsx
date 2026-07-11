@@ -31,6 +31,23 @@ function formatLastActive(value: string | null) {
   return new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+// Quality is a 0–110 composite score (5 skill dimensions + punctuality), NOT a
+// percentage — render it as "/110" to match the Performance and Comparison
+// pages instead of a misleading "%".
+const QUALITY_MAX = 110;
+
+// The green "Active" dot must reflect recent activity, not whether the account
+// is enabled. A just-invited telecaller who has never made a call is enabled
+// but not "Active" — derive the dot from last_active so it reads honestly, and
+// surface the enabled/disabled state as a separate badge.
+const ACTIVE_WINDOW_DAYS = 7;
+function activityState(lastActive: string | null): { dot: string; label: string } {
+  if (!lastActive) return { dot: "bg-slate-300", label: "Never active" };
+  const days = (Date.now() - new Date(lastActive).getTime()) / 86_400_000;
+  if (days <= ACTIVE_WINDOW_DAYS) return { dot: "bg-emerald-500", label: "Active" };
+  return { dot: "bg-amber-500", label: "Idle" };
+}
+
 export default function ManageTeamPage() {
   const [tab, setTab] = useState("all");
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -226,11 +243,14 @@ export default function ManageTeamPage() {
                         </span>
                       </td>
                       <td className="px-3 py-3">
-                        <span className="flex items-center gap-1.5 text-xs font-medium">
-                          <span
-                            className={cn("size-1.5 rounded-full", m.status === "Active" ? "bg-emerald-500" : "bg-slate-300")}
-                          />
-                          {m.status}
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                          <span className={cn("size-1.5 rounded-full", activityState(m.last_active).dot)} />
+                          {activityState(m.last_active).label}
+                          {m.status === "Inactive" && (
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                              Disabled
+                            </span>
+                          )}
                         </span>
                       </td>
                       <td className="px-3 py-3 text-right font-mono">{m.calls}</td>
@@ -240,8 +260,8 @@ export default function ManageTeamPage() {
                           <span className="text-xs text-slate-400">No calls yet</span>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <ProgressBar value={m.quality} tone="success" className="w-20" />
-                            <span className="font-mono text-xs font-semibold text-slate-600">{m.quality}%</span>
+                            <ProgressBar value={Math.round((m.quality / QUALITY_MAX) * 100)} tone="success" className="w-20" />
+                            <span className="font-mono text-xs font-semibold text-slate-600">{m.quality}/{QUALITY_MAX}</span>
                           </div>
                         )}
                       </td>

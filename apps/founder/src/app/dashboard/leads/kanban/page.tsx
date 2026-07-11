@@ -55,6 +55,8 @@ export default function KanbanBoardPage() {
   const [newLeadReason, setNewLeadReason] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [telecallerFilter, setTelecallerFilter] = useState("all");
+  const [moveError, setMoveError] = useState<string | null>(null);
 
   function load() {
     setLoading(true);
@@ -74,13 +76,19 @@ export default function KanbanBoardPage() {
   async function moveStage(lead: BoardLead, stage: string, dealValue?: number) {
     if (stage === lead.pipeline_stage) return;
     setMovingId(lead.id);
+    setMoveError(null);
     const prevStage = lead.pipeline_stage;
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, pipeline_stage: stage } : l)));
     try {
       await leadsApi.updateStage(lead.id, stage, dealValue);
-    } catch {
-      // Revert on failure — don't leave the board showing a move that didn't persist.
+    } catch (e) {
+      // Revert on failure — don't leave the board showing a move that didn't
+      // persist — but surface WHY instead of silently snapping the card back,
+      // which reads as the lead "disappearing".
       setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, pipeline_stage: prevStage } : l)));
+      setMoveError(
+        `Couldn't move "${lead.name}" to ${stage}${e instanceof ApiError ? `: ${e.message}` : ""}. It's back in ${prevStage} — try again.`
+      );
     } finally {
       setMovingId(null);
     }
@@ -135,16 +143,51 @@ export default function KanbanBoardPage() {
     }
   }
 
+  const telecallerNames = useMemo(
+    () => Array.from(new Set(leads.map((l) => l.telecaller_name).filter((n): n is string => !!n))).sort(),
+    [leads]
+  );
+
+  const visibleLeads = useMemo(() => {
+    if (telecallerFilter === "all") return leads;
+    if (telecallerFilter === "__unassigned__") return leads.filter((l) => !l.telecaller_name);
+    return leads.filter((l) => l.telecaller_name === telecallerFilter);
+  }, [leads, telecallerFilter]);
+
+  function exportCsv() {
+    const header = ["Name", "Source", "Score", "Stage", "Telecaller", "Days Stuck"];
+    const escape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const rows = visibleLeads.map((l) =>
+      [
+        l.name,
+        l.source ?? "",
+        l.score !== null ? String(l.score) : "",
+        l.pipeline_stage,
+        l.telecaller_name ?? "Unassigned",
+        String(l.days_stuck),
+      ]
+        .map((c) => escape(c))
+        .join(",")
+    );
+    const blob = new Blob([[header.join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "leads-kanban.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const stuckList = useMemo(
     () =>
-      [...leads]
+      [...visibleLeads]
         .filter((l) => l.days_stuck > 0)
         .sort((a, b) => b.days_stuck - a.days_stuck)
         .map((l) => ({
           ...l,
           action: l.days_stuck >= 5 ? "CRITICAL" : l.days_stuck >= 3 ? "HIGH" : "MEDIUM",
         })),
-    [leads]
+    [visibleLeads]
   );
 
   const staleCount = leads.filter((l) => l.days_stuck >= 5).length;
@@ -158,8 +201,21 @@ export default function KanbanBoardPage() {
         description="9-stage funnel view — use the stage picker on a card to move it"
         action={
           <div className="flex items-center gap-2">
-            <div className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600">All</div>
-            <Button variant="outline" size="sm">
+            <select
+              value={telecallerFilter}
+              onChange={(e) => setTelecallerFilter(e.target.value)}
+              aria-label="Filter by telecaller"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600"
+            >
+              <option value="all">All telecallers</option>
+              <option value="__unassigned__">Unassigned</option>
+              {telecallerNames.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <Button variant="outline" size="sm" onClick={exportCsv} disabled={visibleLeads.length === 0}>
               <Download className="size-3.5" /> Export
             </Button>
             <Button size="sm" onClick={openAddLead}>
@@ -194,6 +250,15 @@ export default function KanbanBoardPage() {
         </div>
       )}
 
+      {moveError && (
+        <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span>{moveError}</span>
+          <button className="shrink-0 font-semibold underline" onClick={() => setMoveError(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="mt-4 overflow-x-auto px-4 sm:px-6 lg:px-8 pb-2">
           <div className="flex gap-3" style={{ width: "max-content" }}>
@@ -211,7 +276,7 @@ export default function KanbanBoardPage() {
           <div className="mt-4 overflow-x-auto px-4 sm:px-6 lg:px-8 pb-2">
             <div className="flex gap-3" style={{ width: "max-content" }}>
               {stages.map((stage) => {
-                const stageLeads = leads.filter((l) => l.pipeline_stage === stage);
+                const stageLeads = visibleLeads.filter((l) => l.pipeline_stage === stage);
                 return (
                   <div key={stage} className="w-64 shrink-0">
                     <div className="mb-2 flex items-center justify-between px-1">
@@ -243,11 +308,17 @@ export default function KanbanBoardPage() {
                             onChange={(e) => handleStagePick(lead, e.target.value)}
                             className="mt-2 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 disabled:opacity-50"
                           >
-                            {stages.map((s) => (
-                              <option key={s} value={s}>
-                                Move to {s}
-                              </option>
-                            ))}
+                            {/* Leads can only advance — offer the current stage and
+                                everything downstream of it, never an earlier stage. */}
+                            {stages.map((s, i) => {
+                              const currentIdx = stages.indexOf(lead.pipeline_stage);
+                              if (i < currentIdx) return null;
+                              return (
+                                <option key={s} value={s}>
+                                  {s === lead.pipeline_stage ? s : `Move to ${s}`}
+                                </option>
+                              );
+                            })}
                           </select>
                         </Card>
                       ))}

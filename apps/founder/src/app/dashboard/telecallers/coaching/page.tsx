@@ -59,7 +59,7 @@ function CoachingQueueContent() {
             <p className="px-5 py-6 text-sm text-slate-400">
               {telecallerFilter
                 ? "No recommendations for this telecaller right now — nothing scored below threshold in the last 14 days."
-                : "No recommendations right now — the whole team is scoring above threshold on every dimension."}
+                : "No coaching recommendations right now. This covers telecallers with scored calls in the last 14 days — anyone with no scored calls yet won't appear here."}
             </p>
           ) : (
             <div className="divide-y divide-slate-100">

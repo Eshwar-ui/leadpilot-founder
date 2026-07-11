@@ -60,8 +60,8 @@ export default function AttendancePage() {
             <div key={w.id} className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
               <span className="size-2 shrink-0 rounded-full bg-amber-500" />
               <p className="text-sm text-amber-800">
-                <span className="font-semibold text-amber-900">{w.telecaller_name}</span> checked in but hasn&apos;t
-                checked out yet on {w.date}.
+                <span className="font-semibold text-amber-900">{w.telecaller_name}</span>{" "}
+                checked in but hasn&apos;t checked out yet on {w.date}.
               </p>
             </div>
           ))}
