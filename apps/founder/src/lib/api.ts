@@ -456,6 +456,8 @@ export const leadsQualityApi = {
   },
 };
 
+export type AttendanceStatus = "completed" | "on_shift" | "auto_closed";
+
 export type AttendanceRecord = {
   id: string;
   user_id: string;
@@ -463,7 +465,9 @@ export type AttendanceRecord = {
   date: string;
   check_in_at: string | null;
   check_out_at: string | null;
+  effective_check_out_at: string | null;
   hours_worked: number | null;
+  status: AttendanceStatus;
 };
 
 export type AttendanceResponse = {
@@ -478,6 +482,13 @@ export const attendanceApi = {
     if (params?.telecaller_id) query.set("telecaller_id", params.telecaller_id);
     const qs = query.toString();
     return authedRequest<AttendanceResponse>(`/api/attendance${qs ? `?${qs}` : ""}`);
+  },
+  // Founder correction: set the real check-out time on a record (ISO string).
+  correct(recordId: string, checkOutAt: string) {
+    return authedRequest<AttendanceRecord>(`/api/attendance/${recordId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ check_out_at: checkOutAt }),
+    });
   },
 };
 
