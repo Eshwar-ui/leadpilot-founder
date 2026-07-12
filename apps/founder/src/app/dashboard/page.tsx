@@ -84,9 +84,6 @@ export default function DailySnapshotPage() {
   const [teamStatus, setTeamStatus] = useState<TeamHealthEntry[]>([]);
   const [teamStatusLoading, setTeamStatusLoading] = useState(true);
   const [teamStatusError, setTeamStatusError] = useState<string | null>(null);
-  // Status filter for the Team Health table — the one dimension on this
-  // (month-to-date) page that can actually be filtered client-side.
-  const [statusFilter, setStatusFilter] = useState("all");
 
   // Snapshot date range. Initialised client-side (this month) to avoid an
   // SSR/client Date hydration mismatch; the new-lead and call counts reload
@@ -198,13 +195,10 @@ export default function DailySnapshotPage() {
   const moneyAtRisk =
     wastedCount != null && goal?.avg_deal_value != null ? wastedCount * goal.avg_deal_value : null;
 
-  const visibleTeamStatus =
-    statusFilter === "all" ? teamStatus : teamStatus.filter((t) => t.status === statusFilter);
-
   function exportSnapshotCsv() {
     const header = ["Telecaller", "Status", "Calls", "Connected", "Closed", "Quality", "Revenue Today", "Trend"];
     const escape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-    const rows = visibleTeamStatus.map((t) =>
+    const rows = teamStatus.map((t) =>
       [t.name, t.status, t.calls, t.connected, t.closed_won, t.quality, t.revenue_today, t.trend]
         .map((c) => escape(String(c)))
         .join(",")
@@ -225,20 +219,6 @@ export default function DailySnapshotPage() {
         action={
           <div className="flex items-center gap-2">
             {dateRange && <DateRangePicker value={dateRange} onChange={setDateRange} />}
-            <label className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600">
-              <Filter className="size-3.5 text-slate-400" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                aria-label="Filter team health by status"
-                className="bg-transparent text-xs font-medium text-slate-600 focus:outline-none"
-              >
-                <option value="all">All statuses</option>
-                <option value="Active">Active</option>
-                <option value="Break">Break</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </label>
             <Button variant="outline" size="sm" onClick={exportSnapshotCsv}>
               <Download className="size-3.5" /> Export
             </Button>
@@ -454,8 +434,6 @@ export default function DailySnapshotPage() {
             <p className="px-5 py-6 text-sm text-red-600">{teamStatusError}</p>
           ) : !teamStatusLoading && teamStatus.length === 0 ? (
             <p className="px-5 py-6 text-sm text-slate-400">No telecallers on this team yet.</p>
-          ) : !teamStatusLoading && visibleTeamStatus.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-slate-400">No telecallers with status “{statusFilter}” right now.</p>
           ) : (
             <div className="mt-3 overflow-x-auto">
               <table className="w-full text-sm">
@@ -479,7 +457,7 @@ export default function DailySnapshotPage() {
                       <SkeletonTableRow columns={8} />
                     </>
                   ) : (
-                    visibleTeamStatus.map((t) => (
+                    teamStatus.map((t) => (
                       <tr key={t.id}>
                         <td className="px-5 py-3 font-medium text-slate-900">{t.name}</td>
                         <td className="px-3 py-3">
