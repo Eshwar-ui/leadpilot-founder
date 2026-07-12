@@ -3,6 +3,7 @@ name: Deploy to Firebase Hosting on merge
 on:
   push:
     branches: [master]
+  workflow_dispatch: {} # lets you trigger a deploy manually after setting the secret
 
 jobs:
   build_and_deploy:
@@ -22,6 +23,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter founder build
 
-      - run: npx firebase-tools deploy --only hosting --non-interactive
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+      # Service-account auth. The old FIREBASE_TOKEN approach is deprecated and
+      # was failing every run with "Failed to authenticate" (empty secret). Set
+      # the FIREBASE_SERVICE_ACCOUNT_LEAD_PILOT_1FFE3 repo secret to the
+      # service-account JSON for this to work.
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LEAD_PILOT_1FFE3 }}
+          channelId: live
+          projectId: lead-pilot-1ffe3

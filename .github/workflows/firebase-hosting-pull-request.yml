@@ -2,6 +2,11 @@ name: Deploy preview to Firebase Hosting on PR
 
 on: pull_request
 
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+
 jobs:
   build_and_preview:
     if: github.event.pull_request.head.repo.full_name == github.repository
@@ -21,6 +26,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter founder build
 
-      - run: npx firebase-tools hosting:channel:deploy "pr-${{ github.event.number }}" --expires 7d --non-interactive
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+      # Service-account auth (same secret as the merge workflow). Deploys the PR
+      # to a temporary preview channel and comments the URL on the PR.
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_LEAD_PILOT_1FFE3 }}
+          projectId: lead-pilot-1ffe3
+          expires: 7d
