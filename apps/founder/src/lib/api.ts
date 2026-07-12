@@ -110,6 +110,13 @@ export const authApi = {
   },
 };
 
+export type AlertConfig = {
+  wastage_days: number | null;
+  zombie_days: number | null;
+  performance_gap: number | null;
+  quality_floor: number | null;
+};
+
 export type OrgProfile = {
   id: string;
   name: string;
@@ -127,6 +134,7 @@ export type OrgProfile = {
   monthly_revenue_target: number | null;
   logo_url: string | null;
   address: string | null;
+  alert_config: AlertConfig | null;
 };
 
 export type OrgProfileInput = Partial<Omit<OrgProfile, "id" | "slug">>;

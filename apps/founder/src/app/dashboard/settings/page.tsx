@@ -16,11 +16,6 @@ const VOICE_OPTIONS = ["Premium", "Friendly", "Authoritative", "Casual"];
 
 const PLACEHOLDER_CARDS = [
   {
-    icon: Bell,
-    title: "Alert Configuration",
-    description: "Set thresholds for every alert type.",
-  },
-  {
     icon: Megaphone,
     title: "Budget Guardrail Rules",
     description: "Configure warn (90%), auto-pause individual (120%), and auto-pause all (115%) rules.",
@@ -32,6 +27,17 @@ const PLACEHOLDER_CARDS = [
   },
 ];
 
+// Alert Configuration — thresholds the insights engine reads. Placeholders show
+// the backend's built-in defaults so a blank field clearly means "use default".
+const ALERT_DEFAULTS = { wastage_days: 3, zombie_days: 7, performance_gap: 15, quality_floor: 40 };
+
+const ALERT_FIELDS: { key: keyof typeof ALERT_DEFAULTS; label: string; hint: string; min: number; max: number }[] = [
+  { key: "wastage_days", label: "Untouched-lead alert (days)", hint: "Flag New/Assigned leads with no calls after this many days.", min: 1, max: 90 },
+  { key: "zombie_days", label: "Stalled-lead alert (days)", hint: "Flag mid-pipeline leads not progressing after this many days.", min: 1, max: 90 },
+  { key: "performance_gap", label: "Underperformer gap (points)", hint: "Flag a telecaller this many quality points below team average.", min: 1, max: 110 },
+  { key: "quality_floor", label: "Lead-quality floor (/100)", hint: "Alert when the average BANT score drops below this.", min: 0, max: 100 },
+];
+
 export default function SettingsPage() {
   const [profile, setProfile] = useState<OrgProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,6 +45,10 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const [alertSaving, setAlertSaving] = useState(false);
+  const [alertSaved, setAlertSaved] = useState(false);
+  const [alertError, setAlertError] = useState<string | null>(null);
 
   const [pwOpen, setPwOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -101,6 +111,37 @@ export default function SettingsPage() {
       setSaveError(e instanceof ApiError ? e.message : "Failed to save changes");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function updateAlert(key: keyof typeof ALERT_DEFAULTS, value: number | null) {
+    setProfile((prev) => {
+      if (!prev) return prev;
+      const current = prev.alert_config ?? {
+        wastage_days: null,
+        zombie_days: null,
+        performance_gap: null,
+        quality_floor: null,
+      };
+      return { ...prev, alert_config: { ...current, [key]: value } };
+    });
+    setAlertSaved(false);
+  }
+
+  async function saveAlerts() {
+    if (!profile) return;
+    setAlertSaving(true);
+    setAlertError(null);
+    setAlertSaved(false);
+    try {
+      const updated = await orgApi.update({ alert_config: profile.alert_config ?? null });
+      setProfile(updated);
+      setAlertSaved(true);
+      window.setTimeout(() => setAlertSaved(false), 2000);
+    } catch (e) {
+      setAlertError(e instanceof ApiError ? e.message : "Failed to save alert thresholds");
+    } finally {
+      setAlertSaving(false);
     }
   }
 
@@ -298,6 +339,47 @@ export default function SettingsPage() {
           </div>
         </Card>
       </div>
+
+      {profile && (
+        <div className="mt-4 px-4 sm:px-6 lg:px-8">
+          <Card className="p-5">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                  <Bell className="size-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Alert Configuration</p>
+                  <p className="mt-0.5 text-sm text-slate-500">
+                    Thresholds the insights engine uses to flag wastage, stalled leads, and underperformance.
+                    Leave a field blank to use the default.
+                  </p>
+                </div>
+              </div>
+              <Button size="sm" onClick={saveAlerts} disabled={alertSaving}>
+                {alertSaving ? "Saving…" : alertSaved ? "Saved" : "Save Thresholds"}
+              </Button>
+            </div>
+            {alertError && <p className="mb-3 text-xs font-medium text-red-600">{alertError}</p>}
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              {ALERT_FIELDS.map((f) => (
+                <SettingsField key={f.key} label={f.label}>
+                  <input
+                    type="number"
+                    min={f.min}
+                    max={f.max}
+                    value={profile.alert_config?.[f.key] ?? ""}
+                    onChange={(e) => updateAlert(f.key, e.target.value ? Number(e.target.value) : null)}
+                    placeholder={`Default: ${ALERT_DEFAULTS[f.key]}`}
+                    className="input"
+                  />
+                  <p className="mt-1 text-xs text-slate-400">{f.hint}</p>
+                </SettingsField>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
 
       <div className="mt-4 grid grid-cols-1 gap-4 px-4 sm:px-6 lg:px-8 sm:grid-cols-2">
         {PLACEHOLDER_CARDS.map((c) => (
