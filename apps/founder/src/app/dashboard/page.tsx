@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Filter, Target, BarChart3, CheckCircle2, Phone, IndianRupee, Trophy, ShieldAlert, Activity, Calendar, Download } from "lucide-react";
+import { Filter, Target, BarChart3, CheckCircle2, Phone, IndianRupee, Trophy, ShieldAlert, Activity, Download } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { DateRangePicker, type DateRange } from "@/components/ui/DateRangePicker";
 import { StatCard } from "@/components/ui/StatCard";
 import { AlertBanner } from "@/components/ui/AlertBanner";
 import { Card } from "@/components/ui/Card";
@@ -87,23 +88,23 @@ export default function DailySnapshotPage() {
   // (month-to-date) page that can actually be filtered client-side.
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // Real month-to-date range for the header. Was a hardcoded "01/01/2026 –
-  // 30/01/2026" that filtered nothing and read as stale/wrong on any other
-  // date. Computed on the client (empty on first render) so SSR and hydration
-  // agree. The snapshot/goal stats are all MTD, so this just labels that.
-  const [dateLabel, setDateLabel] = useState("");
+  // Snapshot date range. Initialised client-side (this month) to avoid an
+  // SSR/client Date hydration mismatch; the new-lead and call counts reload
+  // whenever it changes (see the range effect below).
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
   useEffect(() => {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
-    setDateLabel(`${fmt(monthStart)} – ${fmt(now)} ${now.getFullYear()}`);
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    setDateRange({ start: iso(new Date(now.getFullYear(), now.getMonth(), 1)), end: iso(now) });
   }, []);
 
   function load() {
+    if (!dateRange) return;
     setLoading(true);
     setError(null);
     dashboardApi
-      .snapshot()
+      .snapshot(dateRange)
       .then(setSnapshot)
       .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load dashboard snapshot"))
       .finally(() => setLoading(false));
@@ -181,7 +182,7 @@ export default function DailySnapshotPage() {
       .finally(() => setTeamStatusLoading(false));
   }
 
-  useEffect(load, []);
+  useEffect(load, [dateRange]);
   useEffect(() => loadRevenue(range), [range]);
   useEffect(loadGoal, []);
   useEffect(loadTeamAverage, []);
@@ -223,12 +224,7 @@ export default function DailySnapshotPage() {
         title="Daily Snapshot"
         action={
           <div className="flex items-center gap-2">
-            <span
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500"
-              title="All snapshot figures are month-to-date"
-            >
-              <Calendar className="size-3.5" /> {dateLabel || "This month"}
-            </span>
+            {dateRange && <DateRangePicker value={dateRange} onChange={setDateRange} />}
             <label className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600">
               <Filter className="size-3.5 text-slate-400" />
               <select
@@ -241,7 +237,6 @@ export default function DailySnapshotPage() {
                 <option value="Active">Active</option>
                 <option value="Break">Break</option>
                 <option value="Inactive">Inactive</option>
-                <option value="Absent">Absent</option>
               </select>
             </label>
             <Button variant="outline" size="sm" onClick={exportSnapshotCsv}>
@@ -258,6 +253,7 @@ export default function DailySnapshotPage() {
             label={topInsight.severity === "high" ? "Critical Alert" : topInsight.severity === "medium" ? "Alert" : "Notice"}
             message={`${topInsight.title} — ${topInsight.description}`}
             cta="View Details"
+            href="/dashboard/insights/feed"
           />
         </div>
       )}
@@ -290,8 +286,8 @@ export default function DailySnapshotPage() {
           suffix="MTD"
           icon={IndianRupee}
         />
-        <StatCard label="Leads Today" value={loading ? <Skeleton className="h-6 w-12" /> : String(snapshot?.leads_today ?? 0)} icon={CheckCircle2} />
-        <StatCard label="Calls Today" value={loading ? <Skeleton className="h-6 w-12" /> : String(snapshot?.calls_today ?? 0)} icon={Phone} />
+        <StatCard label="New Leads" value={loading ? <Skeleton className="h-6 w-12" /> : String(snapshot?.leads_today ?? 0)} suffix="in range" icon={CheckCircle2} />
+        <StatCard label="Calls" value={loading ? <Skeleton className="h-6 w-12" /> : String(snapshot?.calls_today ?? 0)} suffix="in range" icon={Phone} />
         <StatCard
           label="Closed Deals"
           value={goalLoading ? <Skeleton className="h-6 w-12" /> : String(goal?.deals_closed ?? 0)}

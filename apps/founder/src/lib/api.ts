@@ -316,6 +316,7 @@ export type DashboardSnapshot = {
   hot_leads: number;
   conversion_rate_pct: number;
   total_leads: number;
+  ranged?: boolean;
 };
 
 export type RevenuePoint = { date: string; day: number; revenue: number };
@@ -356,8 +357,9 @@ export type ActivityEvent = {
 };
 
 export const dashboardApi = {
-  snapshot() {
-    return authedRequest<DashboardSnapshot>("/api/dashboard/snapshot");
+  snapshot(range?: { start: string; end: string }) {
+    const qs = range ? `?start=${range.start}&end=${range.end}` : "";
+    return authedRequest<DashboardSnapshot>(`/api/dashboard/snapshot${qs}`);
   },
   revenue(rangeDays: 1 | 7 | 30 | 90 = 30) {
     return authedRequest<DashboardRevenue>(`/api/dashboard/revenue?range=${rangeDays}`);

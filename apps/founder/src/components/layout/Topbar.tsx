@@ -2,15 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, Bell, ChevronDown, LogOut, Menu, Users2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, BarChart3, Bell, ChevronDown, ChevronRight, Info, LogOut, Menu, Users2 } from "lucide-react";
 import { clearSession, getStoredUser } from "@/lib/auth";
 import { markReachable } from "@/lib/connectivity";
 import { insightsApi, type AuthUser, type Insight } from "@/lib/api";
 
-const severityDot: Record<Insight["severity"], string> = {
-  high: "bg-red-500",
-  medium: "bg-amber-500",
-  low: "bg-blue-500",
+const severityMeta: Record<Insight["severity"], { icon: typeof Info; ring: string; text: string; label: string }> = {
+  high: { icon: AlertTriangle, ring: "bg-red-50 text-red-600", text: "text-red-600", label: "Critical" },
+  medium: { icon: AlertCircle, ring: "bg-amber-50 text-amber-600", text: "text-amber-600", label: "Alert" },
+  low: { icon: Info, ring: "bg-blue-50 text-blue-600", text: "text-blue-600", label: "Notice" },
 };
 
 export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
@@ -116,25 +116,65 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
             )}
           </button>
           {notifOpen && (
-            <div className="absolute right-0 z-20 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-              <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Notifications
+            <div className="absolute right-0 z-30 mt-2 w-[22rem] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-900">Notifications</span>
+                  {notifications.length > 0 && (
+                    <span className="rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-bold text-primary-700">
+                      {notifications.length}
+                    </span>
+                  )}
+                </div>
               </div>
               {notifications.length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-slate-400">You&apos;re all caught up.</p>
+                <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+                  <span className="flex size-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">
+                    <Bell className="size-5" />
+                  </span>
+                  <p className="text-sm font-medium text-slate-500">You&apos;re all caught up</p>
+                  <p className="text-xs text-slate-400">New alerts about your pipeline will show up here.</p>
+                </div>
               ) : (
-                <div className="max-h-96 divide-y divide-slate-100 overflow-auto">
-                  {notifications.map((n) => (
-                    <div key={n.id} className="flex gap-2.5 px-4 py-3">
-                      <span className={`mt-1.5 size-2 shrink-0 rounded-full ${severityDot[n.severity]}`} />
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900">{n.title}</p>
-                        <p className="mt-0.5 text-xs text-slate-500">{n.description}</p>
-                      </div>
-                    </div>
-                  ))}
+                <div className="max-h-[24rem] divide-y divide-slate-50 overflow-auto">
+                  {notifications.map((n) => {
+                    const meta = severityMeta[n.severity];
+                    const Icon = meta.icon;
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => {
+                          setNotifOpen(false);
+                          router.push("/dashboard/insights/feed");
+                        }}
+                        className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                      >
+                        <span className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg ${meta.ring}`}>
+                          <Icon className="size-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className={`text-[10px] font-bold uppercase tracking-wide ${meta.text}`}>{meta.label}</span>
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-300">·</span>
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{n.category}</span>
+                          </span>
+                          <span className="mt-0.5 block text-sm font-semibold leading-snug text-slate-900">{n.title}</span>
+                          <span className="mt-0.5 line-clamp-2 block text-xs text-slate-500">{n.description}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
+              <button
+                onClick={() => {
+                  setNotifOpen(false);
+                  router.push("/dashboard/insights/feed");
+                }}
+                className="flex w-full items-center justify-center gap-1 border-t border-slate-100 px-4 py-2.5 text-xs font-semibold text-primary-600 transition-colors hover:bg-primary-50"
+              >
+                View all insights <ChevronRight className="size-3.5" />
+              </button>
             </div>
           )}
         </div>

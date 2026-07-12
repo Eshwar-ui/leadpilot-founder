@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -8,12 +9,15 @@ export function AlertBanner({
   label,
   message,
   cta,
+  href,
 }: {
   label: string;
   message: string;
   cta: string;
+  href?: string;
 }) {
   const [dismissed, setDismissed] = useState(false);
+  const router = useRouter();
   if (dismissed) return null;
 
   return (
@@ -25,7 +29,7 @@ export function AlertBanner({
         </p>
       </div>
       <div className="flex items-center gap-3">
-        <Button variant="danger" size="sm">
+        <Button variant="danger" size="sm" onClick={() => href && router.push(href)}>
           {cta}
         </Button>
         <button onClick={() => setDismissed(true)} className="text-red-400 hover:text-red-600">
