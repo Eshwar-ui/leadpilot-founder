@@ -1,0 +1,4 @@
+# LeadPilot founder portal is a private, authenticated application.
+# There is no public content to index — disallow all crawlers.
+User-agent: *
+Disallow: /

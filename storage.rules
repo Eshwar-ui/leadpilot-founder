@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// LeadPilot does NOT use Firebase Storage — uploaded assets (e.g. the org logo)
+// are sent inline to the FastAPI backend, not to a Firebase bucket, and the web
+// app ships no Firebase SDK. This project only uses Firebase for static Hosting.
+// These deny-all rules ensure the default bucket cannot be read or written by
+// anyone if Storage is ever enabled on lead-pilot-1ffe3 (closing finding V-004).
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// LeadPilot does NOT use Firestore — all application data lives in Postgres
+// (Supabase) behind the FastAPI backend, and the web app ships no Firebase SDK.
+// This project only uses Firebase for static Hosting. These deny-all rules make
+// sure that if a Firestore database is ever provisioned on lead-pilot-1ffe3, it
+// cannot be read or written by anyone (closing pentest finding V-004).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
