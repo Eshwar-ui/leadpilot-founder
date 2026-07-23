@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
+import { DateRangePicker, type DateRange } from "@/components/ui/DateRangePicker";
 import { SkillRadar } from "@/components/charts/SkillRadar";
 import {
   ApiError,
@@ -39,21 +40,34 @@ export default function ComparisonPage() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
 
+  // Initialised client-side (this month, matching the Founder Dashboard's own
+  // default) to avoid an SSR/client Date hydration mismatch.
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
+  useEffect(() => {
+    const now = new Date();
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    setDateRange({ start: iso(new Date(now.getFullYear(), now.getMonth(), 1)), end: iso(now) });
+  }, []);
+
   function load() {
+    if (!dateRange) return;
     setLoading(true);
     setError(null);
     telecallersApi
-      .performance()
+      .performance(dateRange)
       .then((res) => {
         setTelecallers(res.telecallers);
         setTeamAverage(res.team_average);
-        setSelected(res.telecallers.slice(0, 2).map((t) => t.id));
+        // Preserve the founder's picks across a date-range change; only seed
+        // a default selection on the very first load.
+        setSelected((prev) => (prev.length > 0 ? prev.filter((id) => res.telecallers.some((t) => t.id === id)) : res.telecallers.slice(0, 2).map((t) => t.id)));
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load comparison data"))
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, []);
+  useEffect(load, [dateRange]);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -67,7 +81,11 @@ export default function ComparisonPage() {
 
   return (
     <div className="pb-10">
-      <PageHeader title="Telecaller Comparison" description="Side-by-side metrics for 2–4 agents vs team average" />
+      <PageHeader
+        title="Telecaller Comparison"
+        description="Side-by-side metrics for 2–4 agents vs team average"
+        action={dateRange && <DateRangePicker value={dateRange} onChange={setDateRange} />}
+      />
 
       {error && (
         <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">

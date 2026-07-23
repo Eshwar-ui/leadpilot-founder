@@ -3,10 +3,11 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, Sparkles, Download, Calendar } from "lucide-react";
+import { ChevronLeft, Sparkles, Download } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/StatCard";
+import { DateRangePicker, type DateRange } from "@/components/ui/DateRangePicker";
 import { SkillRadar } from "@/components/charts/SkillRadar";
 import {
   ApiError,
@@ -50,17 +51,46 @@ function TelecallerProfileContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Scopes calls, Skill Radar, Best/Needs-Review, and the Call Timeline all at
+  // once (close rate/revenue stay all-time — see backend). Initialised
+  // client-side (this month, matching every other range-enabled page) to
+  // avoid an SSR/client Date hydration mismatch.
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
+  useEffect(() => {
+    const now = new Date();
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    setDateRange({ start: iso(new Date(now.getFullYear(), now.getMonth(), 1)), end: iso(now) });
+  }, []);
+
   function load() {
+    if (!dateRange) return;
     setLoading(true);
     setError(null);
     telecallersApi
-      .performanceDetail(id)
+      .performanceDetail(id, dateRange)
       .then(setDetail)
       .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load telecaller profile"))
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, [id]);
+  useEffect(load, [id, dateRange]);
+
+  function exportTimelineCsv() {
+    if (!detail) return;
+    const header = ["Call ID", "Timestamp", "Lead Verdict"];
+    const escape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const rows = detail.timeline.map((c) =>
+      [c.call_id, c.timestamp, c.lead_verdict ?? ""].map((v) => escape(v)).join(",")
+    );
+    const blob = new Blob([[header.join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${detail.name.replace(/\s+/g, "-").toLowerCase()}-call-timeline.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="pb-10">
@@ -85,7 +115,8 @@ function TelecallerProfileContent() {
         !error && <p className="mt-10 text-center text-sm text-slate-400">Telecaller not found.</p>
       ) : (
         <>
-          <div className="mt-4 flex items-center justify-end gap-2 px-4 sm:px-6 lg:px-8">
+          <div className="mt-4 flex flex-wrap items-center justify-end gap-2 px-4 sm:px-6 lg:px-8">
+            {dateRange && <DateRangePicker value={dateRange} onChange={setDateRange} />}
             <Button variant="outline" size="sm" onClick={() => router.push("/dashboard/telecallers/comparison")}>
               Compare
             </Button>
@@ -107,7 +138,7 @@ function TelecallerProfileContent() {
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-4 px-4 sm:px-6 lg:px-8 lg:grid-cols-4">
-            <StatCard label="Total Calls" value={detail.calls} suffix="MTD" />
+            <StatCard label="Total Calls" value={detail.calls} />
             <StatCard label="Connect Rate" value={`${detail.connect_pct}%`} />
             <StatCard label="Positive Rate" value={`${detail.positive_pct}%`} />
             <StatCard label="Close Rate" value={`${detail.close_pct}%`} />
@@ -133,7 +164,7 @@ function TelecallerProfileContent() {
               <h3 className="text-xs font-bold uppercase tracking-wide text-emerald-600">Best Calls (AI-selected)</h3>
               <div className="mt-3 divide-y divide-slate-100">
                 {detail.best_calls.length === 0 ? (
-                  <p className="py-4 text-sm text-slate-400">No standout calls yet.</p>
+                  <p className="py-4 text-sm text-slate-400">No standout calls in this range.</p>
                 ) : (
                   detail.best_calls.map((c) => (
                     <Link
@@ -162,7 +193,7 @@ function TelecallerProfileContent() {
               <h3 className="text-xs font-bold uppercase tracking-wide text-red-600">Needs Review (AI-selected)</h3>
               <div className="mt-3 divide-y divide-slate-100">
                 {detail.needs_review.length === 0 ? (
-                  <p className="py-4 text-sm text-slate-400">Nothing flagged for review.</p>
+                  <p className="py-4 text-sm text-slate-400">Nothing flagged for review in this range.</p>
                 ) : (
                   detail.needs_review.map((c) => (
                     <Link
@@ -190,14 +221,13 @@ function TelecallerProfileContent() {
             <Card>
               <div className="flex items-center justify-between p-5 pb-0">
                 <h3 className="text-sm font-semibold text-slate-900">Call Timeline</h3>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm"><Calendar className="size-3.5" /> Today</Button>
-                  <Button variant="outline" size="sm"><Download className="size-3.5" /> CSV</Button>
-                </div>
+                <Button variant="outline" size="sm" onClick={exportTimelineCsv} disabled={detail.timeline.length === 0}>
+                  <Download className="size-3.5" /> CSV
+                </Button>
               </div>
               <div className="mt-3 divide-y divide-slate-100">
                 {detail.timeline.length === 0 ? (
-                  <p className="px-5 py-6 text-sm text-slate-400">No calls logged yet.</p>
+                  <p className="px-5 py-6 text-sm text-slate-400">No calls in this range.</p>
                 ) : (
                   detail.timeline.map((c) => (
                     <Link

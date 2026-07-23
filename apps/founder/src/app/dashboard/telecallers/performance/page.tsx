@@ -6,6 +6,7 @@ import { Download } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { DateRangePicker, type DateRange } from "@/components/ui/DateRangePicker";
 import { Sparkline } from "@/components/charts/Sparkline";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { ApiError, telecallersApi, type TelecallerPerformance } from "@/lib/api";
@@ -25,17 +26,28 @@ export default function PerformanceMatrixPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Initialised client-side (this month, matching the Founder Dashboard's own
+  // default) to avoid an SSR/client Date hydration mismatch.
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
+  useEffect(() => {
+    const now = new Date();
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    setDateRange({ start: iso(new Date(now.getFullYear(), now.getMonth(), 1)), end: iso(now) });
+  }, []);
+
   function load() {
+    if (!dateRange) return;
     setLoading(true);
     setError(null);
     telecallersApi
-      .performance()
+      .performance(dateRange)
       .then((res) => setTelecallers(res.telecallers))
       .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load telecaller performance"))
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, []);
+  useEffect(load, [dateRange]);
 
   return (
     <div className="pb-10">
@@ -43,9 +55,12 @@ export default function PerformanceMatrixPage() {
         title="Team Performance Overview"
         description="Ranked by AI call quality — click on a telecaller to view their complete profile."
         action={
-          <Button variant="outline" size="sm">
-            <Download className="size-3.5" /> CSV
-          </Button>
+          <>
+            {dateRange && <DateRangePicker value={dateRange} onChange={setDateRange} />}
+            <Button variant="outline" size="sm">
+              <Download className="size-3.5" /> CSV
+            </Button>
+          </>
         }
       />
 

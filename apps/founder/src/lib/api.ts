@@ -299,11 +299,13 @@ export type TeamHealthResponse = {
 };
 
 export const telecallersApi = {
-  performance() {
-    return authedRequest<TelecallerPerformanceResponse>("/api/telecallers/performance");
+  performance(range?: { start: string; end: string }) {
+    const qs = range ? `?start=${range.start}&end=${range.end}` : "";
+    return authedRequest<TelecallerPerformanceResponse>(`/api/telecallers/performance${qs}`);
   },
-  performanceDetail(telecallerId: string) {
-    return authedRequest<TelecallerPerformanceDetail>(`/api/telecallers/performance/${telecallerId}`);
+  performanceDetail(telecallerId: string, range?: { start: string; end: string }) {
+    const qs = range ? `?start=${range.start}&end=${range.end}` : "";
+    return authedRequest<TelecallerPerformanceDetail>(`/api/telecallers/performance/${telecallerId}${qs}`);
   },
   status() {
     return authedRequest<TeamHealthResponse>("/api/telecallers/status");

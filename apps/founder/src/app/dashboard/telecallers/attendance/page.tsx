@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { DateRangePicker, type DateRange } from "@/components/ui/DateRangePicker";
 import { ApiError, attendanceApi, type AttendanceRecord, type AttendanceStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -45,17 +46,30 @@ export default function AttendancePage() {
   const [saving, setSaving] = useState(false);
   const [correctError, setCorrectError] = useState<string | null>(null);
 
+  // Initialised client-side (matches the backend's own last-30-days default)
+  // to avoid an SSR/client Date hydration mismatch.
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
+  useEffect(() => {
+    const now = new Date();
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const start = new Date(now);
+    start.setDate(start.getDate() - 29);
+    setDateRange({ start: iso(start), end: iso(now) });
+  }, []);
+
   function load() {
+    if (!dateRange) return;
     setLoading(true);
     setError(null);
     attendanceApi
-      .list()
+      .list({ from_date: dateRange.start, to_date: dateRange.end })
       .then((res) => setRecords(res.records))
       .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load attendance"))
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, []);
+  useEffect(load, [dateRange]);
 
   const onShiftCount = records.filter((r) => r.status === "on_shift").length;
   const missed = records.filter((r) => r.status === "auto_closed");
@@ -83,7 +97,11 @@ export default function AttendancePage() {
 
   return (
     <div className="pb-10">
-      <PageHeader title="Attendance & Shift Monitor" description="Check-in · check-out · hours worked per telecaller" />
+      <PageHeader
+        title="Attendance & Shift Monitor"
+        description="Check-in · check-out · hours worked per telecaller"
+        action={dateRange && <DateRangePicker value={dateRange} onChange={setDateRange} />}
+      />
 
       {error && (
         <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
