@@ -2,10 +2,12 @@
 
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Search, Download } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { CopyableId } from "@/components/ui/CopyableId";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { ApiError, leadsApi, type BoardLead } from "@/lib/api";
 import { cn, formatINR } from "@/lib/utils";
@@ -43,6 +45,7 @@ const ALL_OWNERS = "All owners";
 const ALL_SOURCES = "All sources";
 
 export default function AllLeadsPage() {
+  const router = useRouter();
   const [leads, setLeads] = useState<BoardLead[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -235,12 +238,17 @@ export default function AllLeadsPage() {
                   </tr>
                 ) : (
                   visible.map((l) => (
-                    <tr key={l.id} className="hover:bg-slate-50">
+                    <tr
+                      key={l.id}
+                      onClick={() => router.push(`/dashboard/leads/detail?id=${l.id}`)}
+                      className="cursor-pointer hover:bg-slate-50"
+                    >
                       <td className="px-5 py-3">
                         <Link href={`/dashboard/leads/detail?id=${l.id}`} className="block font-medium text-slate-900 hover:text-primary-600">
                           {l.name}
                         </Link>
                         {l.phone && <span className="block text-xs text-slate-400">{l.phone}</span>}
+                        <CopyableId id={l.id} className="mt-0.5" />
                       </td>
                       <td className="max-w-[220px] truncate px-3 py-3 text-slate-500">{l.reason || "—"}</td>
                       <td className="px-3 py-3 text-slate-500">{l.source || "—"}</td>

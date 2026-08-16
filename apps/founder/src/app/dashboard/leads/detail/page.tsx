@@ -7,6 +7,7 @@ import { ArrowLeft, Phone, Copy, Flame, Sparkles, Pencil } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { CopyableId } from "@/components/ui/CopyableId";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ApiError, leadsApi, orgApi, teamApi, type LeadDetail, type TeamMember } from "@/lib/api";
 import { cn, formatINR, VERDICT_TONE } from "@/lib/utils";
@@ -254,6 +255,7 @@ function LeadDetailContent() {
                     {lead.phone ?? "No phone on file"}
                     {lead.telecaller_name && <> · Assigned to {lead.telecaller_name}</>}
                   </p>
+                  <CopyableId id={lead.id} className="mt-1" />
                 </div>
                 <div className="flex items-center gap-2">
                   {lead.phone && (
