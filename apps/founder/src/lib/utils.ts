@@ -24,3 +24,39 @@ export function formatSeconds(seconds: number): string {
   const s = Math.round(seconds % 60);
   return `${m}m ${s}s`;
 }
+
+/** Up to 2 uppercase initials from a person's name, for avatar chips. */
+export function initials(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]!.toUpperCase())
+    .join("");
+}
+
+/** AI lead-verdict badge colors. Hot = best signal = success green, all the
+ * way down to Junk = danger red — same direction as every other tone map in
+ * this app (status/severity), so a color scan reads consistently everywhere. */
+export const VERDICT_TONE: Record<string, string> = {
+  Hot: "bg-emerald-50 text-emerald-700",
+  Warm: "bg-blue-50 text-blue-700",
+  Cold: "bg-amber-50 text-amber-700",
+  Junk: "bg-red-50 text-red-700",
+};
+
+/** Telecaller live-status badge colors, shared by the Performance Matrix and
+ * Telecaller Detail so a status always reads the same color everywhere. */
+export const TELECALLER_STATUS_DOT: Record<string, string> = {
+  Active: "bg-emerald-500",
+  Break: "bg-amber-500",
+  Inactive: "bg-red-500",
+  Absent: "bg-slate-400",
+};
+
+export const TELECALLER_STATUS_PILL: Record<string, string> = {
+  Active: "bg-emerald-50 text-emerald-700",
+  Break: "bg-amber-50 text-amber-700",
+  Inactive: "bg-red-50 text-red-700",
+  Absent: "bg-slate-100 text-slate-500",
+};

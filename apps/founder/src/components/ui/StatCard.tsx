@@ -7,6 +7,8 @@ export function StatCard({
   suffix,
   delta,
   deltaTone = "success",
+  note,
+  noteTone = "neutral",
   icon: Icon,
   tone = "default",
   className,
@@ -16,6 +18,8 @@ export function StatCard({
   suffix?: string;
   delta?: string;
   deltaTone?: "success" | "danger";
+  note?: string;
+  noteTone?: "neutral" | "warning";
   icon?: LucideIcon;
   tone?: "default" | "danger";
   className?: string;
@@ -61,6 +65,16 @@ export function StatCard({
           {deltaTone === "success" ? "↗ " : "↘ "}
           {delta}
         </p>
+      )}
+      {note && (
+        <span
+          className={cn(
+            "mt-2 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium",
+            noteTone === "warning" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"
+          )}
+        >
+          {note}
+        </span>
       )}
     </div>
   );

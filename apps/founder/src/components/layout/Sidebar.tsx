@@ -2,67 +2,36 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutGrid,
-  Users,
-  BarChart3,
-  ArrowLeftRight,
-  Clock,
-  Kanban,
-  Target,
-  Megaphone,
-  Filter,
-  UserX,
-  Sparkles,
-  FileText,
-  Settings,
-  X,
-  GraduationCap,
-} from "lucide-react";
+import { LayoutGrid, BarChart3, Inbox, Settings, FileText, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Mirrors the redesign mockup's nav: one item per group. Old-design routes
+// (Manage Team, Comparison/Coaching/Attendance, Kanban Board, Campaigns,
+// Insight Feed) still exist on disk and still work if visited directly —
+// they're just not part of the navigable product surface. Report Generator
+// (Sprint 3) is back with a reduced, honest scope: 4 real report types,
+// on-demand preview only — no Campaign ROI (no ad-spend data exists
+// anywhere in the schema) and no scheduled email (no email infra exists).
+// Budget Guardrails and Integrations are NOT here: both need a real
+// Meta/Google Ads API integration this codebase has never built (see the
+// campaigns page's own "not yet live" empty state) — a separate, large
+// project, not something a redesign pass can honestly fake.
 const NAV = [
   {
     section: "Overview",
-    items: [
-      { label: "Daily Snapshot", href: "/dashboard", icon: LayoutGrid },
-      { label: "Manage Team", href: "/dashboard/team", icon: Users },
-    ],
+    items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutGrid }],
   },
   {
     section: "Telecallers",
-    items: [
-      { label: "Performance Matrix", href: "/dashboard/telecallers/performance", icon: BarChart3 },
-      { label: "Comparison", href: "/dashboard/telecallers/comparison", icon: ArrowLeftRight },
-      { label: "Coaching", href: "/dashboard/telecallers/coaching", icon: GraduationCap },
-      { label: "Attendance", href: "/dashboard/telecallers/attendance", icon: Clock },
-    ],
+    items: [{ label: "Performance Matrix", href: "/dashboard/telecallers/performance", icon: BarChart3 }],
   },
   {
     section: "Leads",
-    items: [
-      { label: "Kanban Board", href: "/dashboard/leads/kanban", icon: Kanban },
-      { label: "Lead Quality", href: "/dashboard/leads/quality", icon: Target },
-    ],
-  },
-  {
-    section: "Campaigns",
-    items: [{ label: "Campaign Overview", href: "/dashboard/campaigns", icon: Megaphone }],
-  },
-  {
-    section: "Leakage",
-    dot: true,
-    items: [
-      { label: "Lead Wastage", href: "/dashboard/leakage/wastage", icon: Filter },
-      { label: "Zombie Leads", href: "/dashboard/leakage/zombie", icon: UserX },
-    ],
+    items: [{ label: "All Leads", href: "/dashboard/leads", icon: Inbox }],
   },
   {
     section: "AI Insights",
-    items: [
-      { label: "Insight Feed", href: "/dashboard/insights/feed", icon: Sparkles, live: true },
-      { label: "Report Generator", href: "/dashboard/insights/reports", icon: FileText },
-    ],
+    items: [{ label: "Report Generator", href: "/dashboard/insights/reports", icon: FileText }],
   },
   {
     section: "System",
@@ -99,9 +68,8 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         <nav className="flex flex-1 flex-col gap-5">
           {NAV.map((group) => (
             <div key={group.section}>
-              <div className="mb-1.5 flex items-center gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              <div className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                 {group.section}
-                {group.dot && <span className="size-1.5 rounded-full bg-red-400" />}
               </div>
               <div className="flex flex-col gap-0.5">
                 {group.items.map((item) => {
@@ -113,20 +81,12 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                       href={item.href}
                       onClick={onClose}
                       className={cn(
-                        "flex items-center justify-between rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors",
+                        "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors",
                         active ? "bg-primary-50 text-primary-700" : "text-slate-600 hover:bg-slate-50"
                       )}
                     >
-                      <span className="flex items-center gap-2.5">
-                        <Icon className="size-4" />
-                        {item.label}
-                      </span>
-                      {"live" in item && item.live && (
-                        <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
-                          <span className="size-1.5 rounded-full bg-emerald-500" />
-                          Live
-                        </span>
-                      )}
+                      <Icon className="size-4" />
+                      {item.label}
                     </Link>
                   );
                 })}

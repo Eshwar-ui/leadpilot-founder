@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, LayoutGrid, Users, Target, FileText } from "lucide-react";
+import { Eye, LayoutGrid, Users, Target, FileText, Filter } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -11,21 +11,27 @@ import { cn } from "@/lib/utils";
 const REPORT_OPTIONS: { key: ReportType; name: string; description: string; icon: typeof LayoutGrid }[] = [
   {
     key: "weekly_summary",
-    name: "Weekly Summary",
+    name: "Founder Weekly",
     description: "Revenue, team health, top insights, leakage summary",
     icon: LayoutGrid,
   },
   {
     key: "telecaller_performance",
-    name: "Telecaller Performance",
+    name: "Telecaller Scorecard",
     description: "Per-agent quality score, call metrics, skill breakdown",
     icon: Users,
   },
   {
     key: "lead_quality",
-    name: "Lead Quality",
+    name: "Lead Quality Audit",
     description: "Source matrix, verdict distribution, BANT scoring",
     icon: Target,
+  },
+  {
+    key: "leakage",
+    name: "Leakage Report",
+    description: "Every wasted and stalled lead, with your alert thresholds",
+    icon: Filter,
   },
 ];
 

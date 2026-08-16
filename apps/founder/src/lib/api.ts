@@ -196,9 +196,12 @@ export const teamApi = {
 export type BoardLead = {
   id: string;
   name: string;
+  phone: string | null;
+  reason: string | null;
   source: string | null;
   score: number | null;
   pipeline_stage: string;
+  deal_value: number | null;
   telecaller_name: string | null;
   days_stuck: number;
 };
@@ -208,9 +211,49 @@ export type LeadsBoard = {
   leads: BoardLead[];
 };
 
+export type Touchpoint = {
+  call_id: string;
+  timestamp: string | null;
+  lead_verdict: string | null;
+  score: number | null;
+  summary: string | null;
+};
+
+export type ScoreHistoryPoint = { timestamp: string | null; score: number };
+
+// MemoryFact / MemoryBubble are declared once, below, alongside callsApi —
+// both this lead-detail response and /calls/{id}/memory serialize the same
+// backend MemoryBubble row (see _serialize_bubble in app/api/calls.py).
+
+export type LeadFollowUp = { note: string | null; due_at: string | null };
+
+export type DuplicateLead = { id: string; name: string; pipeline_stage: string };
+
+export type LeadDetail = {
+  id: string;
+  name: string;
+  phone: string | null;
+  reason: string | null;
+  source: string | null;
+  pipeline_stage: string;
+  deal_value: number | null;
+  score: number | null;
+  telecaller_name: string | null;
+  days_stuck: number;
+  created_at: string | null;
+  touchpoints: Touchpoint[];
+  score_history: ScoreHistoryPoint[];
+  memory: MemoryBubble | null;
+  follow_up: LeadFollowUp | null;
+  duplicates: DuplicateLead[];
+};
+
 export const leadsApi = {
   board() {
     return authedRequest<LeadsBoard>("/api/leads/board");
+  },
+  detail(leadId: string) {
+    return authedRequest<LeadDetail>(`/api/leads/${leadId}`);
   },
   updateStage(leadId: string, stage: string, dealValue?: number) {
     return authedRequest<{ id: string; pipeline_stage: string; deal_value: number | null }>(
@@ -229,6 +272,31 @@ export const leadsApi = {
         body: JSON.stringify(input),
       }
     );
+  },
+  updateDetails(
+    leadId: string,
+    input: Partial<{
+      name: string;
+      phone: string | null;
+      reason: string | null;
+      source: string | null;
+      assigned_to: string;
+      deal_value: number | null;
+    }>
+  ) {
+    return authedRequest<{
+      id: string;
+      name: string;
+      phone: string | null;
+      reason: string | null;
+      source: string | null;
+      pipeline_stage: string;
+      deal_value: number | null;
+      telecaller_name: string | null;
+    }>(`/api/leads/${leadId}/details`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   },
 };
 
@@ -274,10 +342,23 @@ export type TelecallerTimelineEntry = {
   lead_verdict: string;
 };
 
+export type DailyCallCount = { date: string; count: number };
+
+export type AssignedLead = {
+  id: string;
+  name: string;
+  pipeline_stage: string;
+  deal_value: number | null;
+};
+
 export type TelecallerPerformanceDetail = TelecallerPerformance & {
+  status: TeamHealthStatus;
+  idle_minutes: number | null;
   best_calls: TelecallerCallSummary[];
   needs_review: TelecallerCallSummary[];
   timeline: TelecallerTimelineEntry[];
+  daily_calls: DailyCallCount[];
+  leads_assigned: AssignedLead[];
 };
 
 export type TeamHealthStatus = "Active" | "Break" | "Inactive" | "Absent";
@@ -292,6 +373,9 @@ export type TeamHealthEntry = {
   quality: number;
   trend: "up" | "down" | null;
   revenue_today: number;
+  leads_assigned: number;
+  last_call_at: string | null;
+  idle_minutes: number | null;
 };
 
 export type TeamHealthResponse = {
@@ -515,7 +599,7 @@ export const insightsApi = {
   },
 };
 
-export type ReportType = "weekly_summary" | "telecaller_performance" | "lead_quality";
+export type ReportType = "weekly_summary" | "telecaller_performance" | "lead_quality" | "leakage";
 
 export type ReportPreview<T = unknown> = {
   report_type: ReportType;
@@ -626,9 +710,45 @@ export type MemoryBubble = {
   updated_at: string | null;
 };
 
+export type CallHeader = {
+  call_id: string;
+  lead_id: string | null;
+  lead_name: string;
+  telecaller_name: string | null;
+  timestamp: string | null;
+  duration_label: string | null; // "MM:SS", derived from the transcript's last turn
+};
+
+export type TranscriptTurn = {
+  role: "AGENT" | "USER";
+  content: string;
+  content_translated?: string;
+  timestamp: string; // "MM:SS"
+};
+
+export type TranscriptResponse = { call_id: string; transcript: { turns: TranscriptTurn[] } | null };
+
+export type TranslatedTranscriptResponse = {
+  call_id: string;
+  source_lang: string;
+  source_lang_name?: string;
+  target_lang: string;
+  already_in_target: boolean;
+  turns: TranscriptTurn[];
+};
+
 export const callsApi = {
+  header(callId: string) {
+    return authedRequest<CallHeader>(`/api/calls/${callId}/header`);
+  },
   score(callId: string) {
     return authedRequest<CallScore>(`/api/calls/${callId}/score`);
+  },
+  transcript(callId: string) {
+    return authedRequest<TranscriptResponse>(`/api/calls/${callId}/transcript`);
+  },
+  translateTranscript(callId: string, target = "en") {
+    return authedRequest<TranslatedTranscriptResponse>(`/api/calls/${callId}/transcript/translate?target=${target}`);
   },
   // Contact's cumulative memory bubble, addressed by a call_id (the backend
   // derives the contact_key). Returns 404 when the contact has no bubble yet.
