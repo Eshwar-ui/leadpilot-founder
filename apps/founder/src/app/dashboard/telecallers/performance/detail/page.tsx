@@ -27,6 +27,10 @@ import { cn, formatINR, formatSeconds, initials, TELECALLER_STATUS_DOT, TELECALL
 // instead of a hardcoded number that can drift from it.
 const BREAK_THRESHOLD_MIN = 15;
 
+// The inline Call Log card is a preview, not the full history — "View all"
+// goes to a dedicated, paginated, date-filterable page for the rest.
+const CALL_LOG_PREVIEW_COUNT = 6;
+
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
@@ -67,6 +71,12 @@ function TelecallerDetailContent() {
   }
 
   useEffect(load, [id]);
+
+  // daily_calls is a fixed 14-real-calendar-day window that always ends on
+  // "today" (see the backend's own comment on that field) — its last entry
+  // is today's count regardless of whatever range is applied elsewhere.
+  const todaysCalls = detail?.daily_calls.length ? detail.daily_calls[detail.daily_calls.length - 1].count : 0;
+  const newLeadsCount = detail?.leads_assigned.filter((l) => l.pipeline_stage === "New").length ?? 0;
 
   return (
     <div className="pb-10">
@@ -121,9 +131,11 @@ function TelecallerDetailContent() {
             </Card>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-4 px-4 sm:px-6 lg:px-8 lg:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-4 px-4 sm:px-6 lg:px-8 lg:grid-cols-3">
             <StatCard label="Calls" value={String(detail.calls)} />
+            <StatCard label="Today's Calls" value={String(todaysCalls)} />
             <StatCard label="Connected" value={`${detail.connect_pct}%`} note="Of calls attempted" />
+            <StatCard label="New Leads" value={String(newLeadsCount)} note="Currently assigned" />
             <StatCard label="Talk Time" value={formatSeconds(detail.talk_time_seconds)} />
             <StatCard
               label="Idle Time"
@@ -181,15 +193,23 @@ function TelecallerDetailContent() {
 
           <div className="mt-4 px-4 sm:px-6 lg:px-8">
             <Card>
-              <div className="p-5 pb-0">
-                <h3 className="text-sm font-semibold text-slate-900">Call Log</h3>
-                <p className="mt-0.5 text-xs text-slate-400">Most recent calls · click to open the AI analysis</p>
+              <div className="flex items-center justify-between gap-3 p-5 pb-0">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Call Log</h3>
+                  <p className="mt-0.5 text-xs text-slate-400">Most recent calls · click to open the AI analysis</p>
+                </div>
+                <Link
+                  href={`/dashboard/telecallers/performance/detail/call-log?id=${id}&name=${encodeURIComponent(detail.name)}`}
+                  className="shrink-0 text-xs font-semibold text-primary-600 hover:underline"
+                >
+                  View all →
+                </Link>
               </div>
               {detail.timeline.length === 0 ? (
                 <p className="px-5 py-6 text-sm text-slate-400">No calls yet.</p>
               ) : (
                 <div className="mt-3 divide-y divide-slate-100">
-                  {detail.timeline.map((c) => (
+                  {detail.timeline.slice(0, CALL_LOG_PREVIEW_COUNT).map((c) => (
                     <Link
                       key={c.call_id}
                       href={`/dashboard/calls/detail?id=${c.call_id}`}

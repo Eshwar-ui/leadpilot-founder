@@ -2,10 +2,11 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Download, Eye, LayoutGrid, Users, Target, FileText, Filter, RefreshCw } from "lucide-react";
+import { Download, LayoutGrid, Users, Target, Filter, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { getStoredUser } from "@/lib/auth";
 import { ApiError, reportsApi, type ReportPreview, type ReportType } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +49,7 @@ function ReportGeneratorContent() {
   const [preview, setPreview] = useState<ReportPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const orgName = getStoredUser()?.org_name ?? "";
 
   const selectedReport = REPORT_OPTIONS.find((r) => r.key === selected)!;
 
@@ -92,97 +94,89 @@ function ReportGeneratorContent() {
     <div className="pb-10">
       <PageHeader title="AI Report Generator" description="Live reports, generated from your current data" />
 
-      <div className="mt-4 grid grid-cols-1 gap-4 px-4 sm:px-6 lg:px-8 lg:grid-cols-2 print:block print:px-0">
-        <div className="space-y-4 print:hidden">
-          <Card className="p-5">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <FileText className="size-4" /> Report Type
-            </h3>
-            <div className="mt-3 space-y-2">
-              {REPORT_OPTIONS.map((r) => {
-                const Icon = r.icon;
-                return (
-                  <button
-                    key={r.key}
-                    onClick={() => setSelected(r.key)}
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors",
-                      selected === r.key ? "border-primary-500 bg-primary-50" : "border-transparent bg-slate-50 hover:bg-slate-100"
-                    )}
-                  >
-                    <span className="flex size-8 items-center justify-center rounded-lg bg-white text-slate-500">
-                      <Icon className="size-4" />
-                    </span>
-                    <span>
-                      <span className={cn("block text-sm font-semibold", selected === r.key ? "text-primary-700" : "text-slate-900")}>
-                        {r.name}
-                      </span>
-                      <span className="block text-xs text-slate-500">{r.description}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Download className="size-4" /> Export
-            </h3>
-            <p className="mt-1 text-xs text-slate-400">Scheduled email delivery is coming soon — export on demand works now.</p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Button variant="outline" onClick={downloadPdf} disabled={!preview}>
-                Export PDF
-              </Button>
-              <Button variant="outline" onClick={downloadCsv} disabled={!preview}>
-                Export CSV
-              </Button>
-            </div>
-          </Card>
+      <div className="mt-4 px-4 sm:px-6 lg:px-8 print:mt-0 print:px-0">
+        {/* Report switcher — jumping between report types stays a click away,
+            but it's a compact control above the document, not a big picker
+            column competing with it for attention. */}
+        <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 print:hidden" role="tablist" aria-label="Report type">
+          {REPORT_OPTIONS.map((r) => (
+            <button
+              key={r.key}
+              role="tab"
+              aria-selected={selected === r.key}
+              onClick={() => setSelected(r.key)}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                selected === r.key ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              {r.name}
+            </button>
+          ))}
         </div>
 
-        <Card className="p-5 print:border-none print:p-0 print:shadow-none" id="report-print-area">
-          <div className="flex items-center justify-between print:hidden">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Eye className="size-4" /> Report Preview
-            </h3>
-            <Button size="sm" variant="outline" onClick={() => load(selected)} disabled={loading}>
-              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} /> Refresh
-            </Button>
+        {error && (
+          <div className="mt-3 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 print:hidden">
+            {error} —{" "}
+            <button className="font-semibold underline" onClick={() => load(selected)}>
+              Retry
+            </button>
           </div>
+        )}
 
-          {error && (
-            <div className="mt-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 print:hidden">
-              {error} —{" "}
-              <button className="font-semibold underline" onClick={() => load(selected)}>
-                Retry
-              </button>
-            </div>
-          )}
-
-          <div className="mt-4 rounded-xl bg-slate-50 p-4 print:mt-0 print:rounded-none print:bg-white print:px-0">
-            <p className="font-semibold text-slate-900">{selectedReport.name}</p>
-            <p className="text-xs text-slate-400">
-              {preview
-                ? `Generated at ${new Date(preview.generated_at).toLocaleString()} · LeadPilot AI`
-                : loading
-                ? "Loading…"
-                : "No data yet."}
-            </p>
-          </div>
-
-          <div className="mt-3">
-            {loading ? (
-              <p className="py-6 text-center text-sm text-slate-400 print:hidden">Loading report…</p>
-            ) : !preview ? (
-              <p className="py-6 text-center text-sm text-slate-400 print:hidden">No report data yet.</p>
-            ) : (
-              <div className="max-h-[28rem] overflow-auto pr-1 print:max-h-none print:overflow-visible">
-                <ReportView data={preview.data} />
+        {/* The report itself, styled as a document — a page you'd actually
+            hand to someone, not a dashboard panel of raw data. */}
+        <div className="mx-auto mt-4 max-w-3xl print:mt-0 print:max-w-none">
+          <div
+            id="report-print-area"
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.06)] print:rounded-none print:border-none print:shadow-none"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-8 py-7 sm:px-10 print:px-0 print:pb-4">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-600">{orgName || "LeadPilot"}</p>
+                <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900">{selectedReport.name}</h1>
+                <p className="mt-1 text-sm text-slate-500">{selectedReport.description}</p>
+                <p className="mt-3 text-xs text-slate-400">
+                  {preview
+                    ? `Generated ${new Date(preview.generated_at).toLocaleString()} · LeadPilot AI`
+                    : loading
+                    ? "Loading…"
+                    : "No data yet."}
+                </p>
               </div>
-            )}
+              <div className="flex shrink-0 items-center gap-2 print:hidden">
+                <button
+                  onClick={() => load(selected)}
+                  disabled={loading}
+                  aria-label="Refresh report"
+                  className="flex size-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+                </button>
+                <Button variant="outline" size="sm" onClick={downloadCsv} disabled={!preview}>
+                  CSV
+                </Button>
+                <Button size="sm" onClick={downloadPdf} disabled={!preview}>
+                  <Download className="size-3.5" /> Download PDF
+                </Button>
+              </div>
+            </div>
+
+            <div className="px-8 py-7 sm:px-10 print:px-0 print:py-4">
+              {loading ? (
+                <div className="space-y-3">
+                  <Skeleton block className="h-16 w-full rounded-xl" />
+                  <Skeleton block className="h-16 w-full rounded-xl" />
+                  <Skeleton block className="h-40 w-full rounded-xl" />
+                </div>
+              ) : !preview ? (
+                <p className="py-10 text-center text-sm text-slate-400">No report data yet.</p>
+              ) : (
+                <ReportView data={preview.data} />
+              )}
+            </div>
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );

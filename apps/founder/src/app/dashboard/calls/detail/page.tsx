@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Play, Pause, Languages } from "lucide-react";
+import { ArrowLeft, Play, Pause, Square, Languages } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -32,6 +32,13 @@ const compliancePill: Record<string, string> = {
 
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtTime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 function ScoreRingCard({ label, value, max }: { label: string; value: number; max: number }) {
@@ -64,8 +71,15 @@ function CallAnalysisContent() {
 
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+  // The Audio object is an imperative handle, not render data — a ref (not
+  // state) so seeking/stopping can mutate it directly without tripping the
+  // "don't mutate useState values" lint rule.
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const [audioReady, setAudioReady] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [audioLoading, setAudioLoading] = useState(true);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
 
   function load() {
     if (!id) {
@@ -87,6 +101,51 @@ function CallAnalysisContent() {
   }
 
   useEffect(load, [id]);
+
+  // This page re-renders in place when `id` changes (e.g. navigating between
+  // two calls via a Link) rather than remounting, so the audio player state
+  // from the previous call was surviving into the new one — togglePlay()
+  // would find a leftover `audioEl` and just resume playback of the prior
+  // call's recording under the new call's header/transcript. Fetching the
+  // recording eagerly (rather than on first click) also means the scrubber
+  // knows the real duration before playback ever starts.
+  useEffect(() => {
+    audioElRef.current?.pause();
+    audioElRef.current = null;
+    setAudioReady(false);
+    setAudioUrl(null);
+    setPlaying(false);
+    setAudioError(null);
+    setDuration(0);
+    setCurrentTime(0);
+
+    if (!id) return;
+    let cancelled = false;
+    setAudioLoading(true);
+    callsApi
+      .fetchAudioBlob(id)
+      .then((blob) => {
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        const el = new Audio(url);
+        el.onloadedmetadata = () => setDuration(el.duration);
+        el.ontimeupdate = () => setCurrentTime(el.currentTime);
+        el.onended = () => {
+          setPlaying(false);
+          setCurrentTime(0);
+        };
+        el.onplay = () => setPlaying(true);
+        el.onpause = () => setPlaying(false);
+        setAudioUrl(url);
+        audioElRef.current = el;
+        setAudioReady(true);
+      })
+      .catch(() => !cancelled && setAudioError("Recording unavailable."))
+      .finally(() => !cancelled && setAudioLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   async function toggleTranslate() {
     if (translated) {
@@ -110,26 +169,25 @@ function CallAnalysisContent() {
     }
   }
 
-  async function togglePlay() {
-    if (audioEl) {
-      if (playing) audioEl.pause();
-      else audioEl.play();
-      return;
-    }
-    setAudioError(null);
-    try {
-      const blob = await callsApi.fetchAudioBlob(id);
-      const url = URL.createObjectURL(blob);
-      const el = new Audio(url);
-      el.onended = () => setPlaying(false);
-      el.onplay = () => setPlaying(true);
-      el.onpause = () => setPlaying(false);
-      setAudioUrl(url);
-      setAudioEl(el);
-      el.play();
-    } catch {
-      setAudioError("Recording unavailable.");
-    }
+  function togglePlay() {
+    const el = audioElRef.current;
+    if (!el) return;
+    if (playing) el.pause();
+    else el.play();
+  }
+
+  function handleSeek(e: ChangeEvent<HTMLInputElement>) {
+    const t = Number(e.target.value);
+    if (audioElRef.current) audioElRef.current.currentTime = t;
+    setCurrentTime(t);
+  }
+
+  function handleStop() {
+    const el = audioElRef.current;
+    if (!el) return;
+    el.pause();
+    el.currentTime = 0;
+    setCurrentTime(0);
   }
 
   useEffect(() => {
@@ -196,15 +254,67 @@ function CallAnalysisContent() {
                 <ScoreRingCard label="Sentiment" value={score.rings.sentiment.value} max={score.rings.sentiment.max} />
               </div>
 
-              <div className="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4">
-                <button
-                  onClick={togglePlay}
-                  aria-label={playing ? "Pause call recording" : "Play call recording"}
-                  className="flex size-9 items-center justify-center rounded-full bg-primary-600 text-white hover:bg-primary-700"
-                >
-                  {playing ? <Pause className="size-4" /> : <Play className="ml-0.5 size-4" />}
-                </button>
-                <span className="text-sm text-slate-500">{audioError ?? "Recording"}</span>
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Recording</h3>
+                {audioError ? (
+                  <p className="mt-3 text-sm font-medium text-red-600">{audioError}</p>
+                ) : (
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      onClick={togglePlay}
+                      disabled={!audioReady || audioLoading}
+                      aria-label={playing ? "Pause call recording" : "Play call recording"}
+                      className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 hover:shadow active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {audioLoading ? (
+                        <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                      ) : playing ? (
+                        <Pause className="size-4" fill="currentColor" />
+                      ) : (
+                        <Play className="ml-0.5 size-4" fill="currentColor" />
+                      )}
+                    </button>
+
+                    <button
+                      onClick={handleStop}
+                      disabled={!audioReady || (!playing && currentTime === 0)}
+                      aria-label="Stop and rewind recording"
+                      className="flex size-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <Square className="size-3.5" fill="currentColor" />
+                    </button>
+
+                    <div className="min-w-0 flex-1 pl-1">
+                      <div className="relative flex h-4 items-center">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full bg-primary-600 transition-[width] duration-150"
+                            style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <div
+                          className="pointer-events-none absolute top-1/2 size-3 -translate-y-1/2 rounded-full bg-primary-600 shadow ring-2 ring-white transition-[left] duration-150"
+                          style={{ left: `calc(${duration > 0 ? (currentTime / duration) * 100 : 0}% - 6px)` }}
+                        />
+                        <input
+                          type="range"
+                          min={0}
+                          max={duration || 0}
+                          step={0.1}
+                          value={currentTime}
+                          onChange={handleSeek}
+                          disabled={!duration}
+                          aria-label="Seek recording"
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                        />
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between font-mono text-[11px] tabular-nums text-slate-400">
+                        <span>{fmtTime(currentTime)}</span>
+                        <span>{duration ? fmtTime(duration) : audioLoading ? "Loading…" : "0:00"}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </Card>
           </div>
