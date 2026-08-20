@@ -16,13 +16,10 @@ import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
-import { Modal } from "@/components/ui/Modal";
 import { SkillRadar } from "@/components/charts/SkillRadar";
+import { EditTelecallerModal, ROLE_LABEL } from "@/components/team/TeamMemberModals";
 import { ApiError, teamApi, telecallersApi, type TeamMember, type TelecallerPerformanceDetail } from "@/lib/api";
 import { cn, formatINR, formatSeconds, initials, TELECALLER_STATUS_DOT, TELECALLER_STATUS_PILL, VERDICT_TONE } from "@/lib/utils";
-
-const ROLES = ["founder", "admin", "ad_manager", "telecaller"] as const;
-const ROLE_LABEL: Record<string, string> = { founder: "Founder", admin: "Admin", ad_manager: "Ad Manager", telecaller: "Telecaller" };
 
 // Same thresholds the backend's status/idle logic runs on (see
 // _BREAK_THRESHOLD_MIN / _INACTIVE_THRESHOLD_MIN in app/api/dashboard.py) —
@@ -49,10 +46,6 @@ function TelecallerDetailContent() {
   // already uses) so the edit modal has real current values, not guesses.
   const [member, setMember] = useState<TeamMember | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [editRole, setEditRole] = useState<string>("telecaller");
-  const [editActive, setEditActive] = useState(true);
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
 
   function load() {
     if (!id) {
@@ -74,29 +67,6 @@ function TelecallerDetailContent() {
   }
 
   useEffect(load, [id]);
-
-  function openEdit() {
-    if (!member) return;
-    setEditRole(member.role);
-    setEditActive(member.status === "Active");
-    setEditError(null);
-    setEditOpen(true);
-  }
-
-  async function saveEdit() {
-    if (!member) return;
-    setSavingEdit(true);
-    setEditError(null);
-    try {
-      const updated = await teamApi.update(member.id, { role: editRole, is_active: editActive });
-      setMember(updated);
-      setEditOpen(false);
-    } catch (e) {
-      setEditError(e instanceof ApiError ? e.message : "Failed to save changes");
-    } finally {
-      setSavingEdit(false);
-    }
-  }
 
   return (
     <div className="pb-10">
@@ -144,7 +114,7 @@ function TelecallerDetailContent() {
                     </p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={openEdit} disabled={!member}>
+                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} disabled={!member}>
                   <Pencil className="size-3.5" /> Edit
                 </Button>
               </div>
@@ -300,48 +270,12 @@ function TelecallerDetailContent() {
         !error && <p className="mt-6 px-4 text-sm text-slate-400 sm:px-6 lg:px-8">Telecaller not found.</p>
       )}
 
-      <Modal
+      <EditTelecallerModal
         open={editOpen}
+        member={member}
         onClose={() => setEditOpen(false)}
-        title={member ? `Edit ${member.name}` : "Edit"}
-        footer={
-          <>
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={saveEdit} disabled={savingEdit}>
-              {savingEdit ? "Saving…" : "Save Changes"}
-            </Button>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-4">
-          {editError && (
-            <p className="rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">{editError}</p>
-          )}
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Role</label>
-            <select
-              value={editRole}
-              onChange={(e) => setEditRole(e.target.value)}
-              className="input"
-            >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>{ROLE_LABEL[r]}</option>
-              ))}
-            </select>
-          </div>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={editActive}
-              onChange={(e) => setEditActive(e.target.checked)}
-              className="size-4 rounded border-slate-300"
-            />
-            Active — unchecking deactivates this account
-          </label>
-        </div>
-      </Modal>
+        onSaved={setMember}
+      />
     </div>
   );
 }

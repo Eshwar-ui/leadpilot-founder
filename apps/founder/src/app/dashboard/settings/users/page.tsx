@@ -5,13 +5,10 @@ import Link from "next/link";
 import { ArrowLeft, UserPlus } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Modal } from "@/components/ui/Modal";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
+import { AddTelecallerModal, ROLES, ROLE_LABEL } from "@/components/team/TeamMemberModals";
 import { ApiError, teamApi, type TeamMember } from "@/lib/api";
 import { cn, initials } from "@/lib/utils";
-
-const ROLES = ["founder", "admin", "ad_manager", "telecaller"] as const;
-const ROLE_LABEL: Record<string, string> = { founder: "Founder", admin: "Admin", ad_manager: "Ad Manager", telecaller: "Telecaller" };
 
 const statusPill: Record<string, string> = {
   Active: "bg-emerald-50 text-emerald-700",
@@ -21,98 +18,6 @@ const statusPill: Record<string, string> = {
 function lastActiveLabel(iso: string | null) {
   if (!iso) return "Never";
   return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
-}
-
-function AddTelecallerModal({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => void }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [role, setRole] = useState<(typeof ROLES)[number]>("telecaller");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ email: string; temp_password: string } | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setName("");
-    setEmail("");
-    setPhone("");
-    setRole("telecaller");
-    setError(null);
-    setResult(null);
-  }, [open]);
-
-  async function submit() {
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await teamApi.invite({ name: name.trim(), email: email.trim(), role, phone: phone.trim() || undefined });
-      setResult({ email: res.member.email, temp_password: res.temp_password });
-      onAdded();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Failed to add team member");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={result ? "Invite Created" : "Add Team Member"}
-      footer={
-        result ? (
-          <Button className="w-full" onClick={onClose}>
-            Done
-          </Button>
-        ) : (
-          <>
-            <Button variant="outline" className="flex-1" onClick={onClose} disabled={saving}>
-              Cancel
-            </Button>
-            <Button className="flex-1" onClick={submit} disabled={saving || !name.trim() || !email.trim()}>
-              {saving ? "Sending…" : "Send Invite"}
-            </Button>
-          </>
-        )
-      }
-    >
-      {result ? (
-        <div className="flex flex-col gap-2">
-          <p>
-            <b>{result.email}</b>{" "}
-            can now sign in with this one-time password — share it with them directly, there&apos;s no invite email yet.
-          </p>
-          <p className="rounded-lg bg-slate-100 px-3 py-2 font-mono text-sm text-slate-800">{result.temp_password}</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-slate-500">Full Name</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Priya Menon" className="input" />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-slate-500">Work Email</span>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@yourclinic.in" className="input" />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-slate-500">Phone</span>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91" className="input" />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-slate-500">Role</span>
-            <select value={role} onChange={(e) => setRole(e.target.value as (typeof ROLES)[number])} className="input">
-              {ROLES.map((r) => (
-                <option key={r} value={r}>{ROLE_LABEL[r]}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-      )}
-    </Modal>
-  );
 }
 
 export default function UserManagementPage() {

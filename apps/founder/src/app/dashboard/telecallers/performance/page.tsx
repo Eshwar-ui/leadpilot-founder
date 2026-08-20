@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, X } from "lucide-react";
+import { Pencil, UserPlus, Users, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatCard } from "@/components/ui/StatCard";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
-import { ApiError, telecallersApi, type TeamHealthEntry } from "@/lib/api";
+import { AddTelecallerModal, EditTelecallerModal } from "@/components/team/TeamMemberModals";
+import { ApiError, teamApi, telecallersApi, type TeamHealthEntry, type TeamMember } from "@/lib/api";
 import { cn, formatINR, initials, TELECALLER_STATUS_DOT, TELECALLER_STATUS_PILL } from "@/lib/utils";
 
 function connectPct(t: TeamHealthEntry) {
@@ -54,6 +55,14 @@ export default function PerformanceMatrixPage() {
   const [compareOpen, setCompareOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
 
+  // Role isn't part of the live-status payload (calls/quality/idle etc.) —
+  // fetched separately from /api/team, same source Settings > Users and the
+  // Telecaller Detail page use, so "Add"/"Edit" here write through the same
+  // endpoint and never disagree with what those screens show.
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<TeamMember | null>(null);
+
   function load() {
     setLoading(true);
     setError(null);
@@ -62,6 +71,7 @@ export default function PerformanceMatrixPage() {
       .then((res) => setTelecallers(res.telecallers))
       .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load team status"))
       .finally(() => setLoading(false));
+    teamApi.list().then(setMembers).catch(() => setMembers([]));
   }
 
   useEffect(load, []);
@@ -90,7 +100,15 @@ export default function PerformanceMatrixPage() {
 
   return (
     <div className="pb-10">
-      <PageHeader title="Performance Matrix" description="Who is working and how today is going" />
+      <PageHeader
+        title="Performance Matrix"
+        description="Who is working and how today is going"
+        action={
+          <Button size="sm" onClick={() => setAdding(true)}>
+            <UserPlus className="size-3.5" /> Add Team Member
+          </Button>
+        }
+      />
 
       {error && (
         <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -162,6 +180,7 @@ export default function PerformanceMatrixPage() {
                   <th className="px-3 py-2 text-right">Closed</th>
                   <th className="px-3 py-2 text-right">Quality</th>
                   <th className="px-5 py-2">Last Call</th>
+                  {!compareOpen && <th className="px-5 py-2" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -225,6 +244,18 @@ export default function PerformanceMatrixPage() {
                         <td className="px-3 py-3 text-right font-mono font-semibold tabular-nums text-emerald-600">{t.closed_won}</td>
                         <td className="px-3 py-3 text-right font-mono tabular-nums">{t.quality}</td>
                         <td className="px-5 py-3 text-xs text-slate-500">{lastCallLabel(t)}</td>
+                        {!compareOpen && (
+                          <td className="px-5 py-3 text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={!members.find((m) => m.id === t.id)}
+                              onClick={() => setEditing(members.find((m) => m.id === t.id) ?? null)}
+                            >
+                              <Pencil className="size-3.5" /> Edit
+                            </Button>
+                          </td>
+                        )}
                       </>
                     );
                     return (
@@ -293,6 +324,14 @@ export default function PerformanceMatrixPage() {
           </Card>
         </div>
       )}
+
+      <AddTelecallerModal open={adding} onClose={() => setAdding(false)} onAdded={load} />
+      <EditTelecallerModal
+        open={editing !== null}
+        member={editing}
+        onClose={() => setEditing(null)}
+        onSaved={(updated) => setMembers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))}
+      />
     </div>
   );
 }
