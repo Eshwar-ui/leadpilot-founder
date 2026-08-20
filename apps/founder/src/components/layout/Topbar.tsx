@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, AlertTriangle, BarChart3, Bell, ChevronRight, Inbox, Info, LogOut, Menu, Search, Users2 } from "lucide-react";
 import { clearSession, getStoredUser } from "@/lib/auth";
@@ -252,14 +253,16 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
-        {/* Static — LeadPilot is one org per founder account, nothing to switch between. */}
-        <div
-          className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 sm:px-3"
-          title="Your organisation"
+        {/* One org per founder account, nothing to switch between — links to
+            the org profile page instead of opening a switcher. */}
+        <Link
+          href="/dashboard/settings/org"
+          className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-50 sm:px-3"
+          title="Organisation profile"
         >
           <Users2 className="size-4 shrink-0 text-slate-400" />
           <span className="hidden max-w-[10rem] truncate md:inline">{orgName}</span>
-        </div>
+        </Link>
         <span className="hidden text-sm text-slate-400 lg:inline">{today}</span>
         <div className="relative" ref={notifRef}>
           <button
@@ -337,9 +340,13 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
             </div>
           )}
         </div>
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs font-semibold text-white">
+        <Link
+          href="/dashboard/settings/org"
+          title="Your profile"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+        >
           {initials}
-        </span>
+        </Link>
         <button
           onClick={handleLogout}
           title="Log out"

@@ -56,11 +56,15 @@ export function DashboardChrome({ children }: { children: React.ReactNode }) {
   if (!checked) return null;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
-      <Topbar onMenuClick={() => setNavOpen(true)} />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
-        <main className="flex-1 overflow-y-auto bg-slate-50">{children}</main>
+    <div className="flex h-screen flex-col overflow-hidden print:block print:h-auto print:overflow-visible">
+      <div className="print:hidden">
+        <Topbar onMenuClick={() => setNavOpen(true)} />
+      </div>
+      <div className="flex flex-1 overflow-hidden print:block print:overflow-visible">
+        <div className="print:hidden">
+          <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
+        </div>
+        <main className="flex-1 overflow-y-auto bg-slate-50 print:overflow-visible print:bg-white">{children}</main>
       </div>
     </div>
   );

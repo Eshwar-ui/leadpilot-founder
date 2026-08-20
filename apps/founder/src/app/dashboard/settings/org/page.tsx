@@ -7,8 +7,9 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { TagInput } from "@/components/ui/TagInput";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { ApiError, orgApi, type OrgProfile } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { getStoredUser } from "@/lib/auth";
+import { ApiError, orgApi, type AuthUser, type OrgProfile } from "@/lib/api";
+import { cn, initials } from "@/lib/utils";
 
 const LANGUAGE_OPTIONS = ["English", "Hindi", "Telugu", "Tamil", "Kannada"];
 const VOICE_OPTIONS = ["Premium", "Friendly", "Authoritative", "Casual"];
@@ -23,6 +24,7 @@ function SettingsField({ label, children, className }: { label: string; children
 }
 
 export default function OrgProfilePage() {
+  const [me, setMe] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<OrgProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -41,6 +43,7 @@ export default function OrgProfilePage() {
   }
 
   useEffect(load, []);
+  useEffect(() => setMe(getStoredUser()), []);
 
   function update<K extends keyof OrgProfile>(key: K, value: OrgProfile[K]) {
     setProfile((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -91,6 +94,22 @@ export default function OrgProfilePage() {
           <ArrowLeft className="size-3.5" /> Settings
         </Link>
       </div>
+
+      {me && (
+        <div className="mt-4 px-4 sm:px-6 lg:px-8">
+          <Card className="flex items-center gap-3 p-4">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary-600 text-sm font-semibold text-white">
+              {initials(me.name)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-900">{me.name}</p>
+              <p className="truncate text-xs text-slate-500">
+                {me.email} · <span className="capitalize">{me.role}</span> at {me.org_name}
+              </p>
+            </div>
+          </Card>
+        </div>
+      )}
 
       <div className="mt-4 px-4 sm:px-6 lg:px-8">
         <div className="flex items-start justify-between gap-4">
