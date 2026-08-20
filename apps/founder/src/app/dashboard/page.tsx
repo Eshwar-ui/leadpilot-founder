@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Filter, Target, Layers, Trophy, Activity, Download, CheckCircle2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Filter, Layers, Trophy, Activity, Download, CheckCircle2, FileText } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { AlertBanner } from "@/components/ui/AlertBanner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { DateRangePicker, type DateRange } from "@/components/ui/DateRangePicker";
 import { Skeleton, SkeletonTableRow } from "@/components/ui/Skeleton";
 import { RevenueChart } from "@/components/charts/RevenueChart";
 import {
@@ -67,6 +69,17 @@ function timeAgo(iso: string) {
   return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }
 
+// Activity event ids are synthetic ("deal-{lead.id}", "hot-{call_id}",
+// "idle-{telecaller.id}" — see get_dashboard_activity in the backend) rather
+// than a dedicated target field, so the CTA button routes by parsing the
+// prefix instead of the API growing a new column just for a link.
+function activityHref(id: string): string | null {
+  if (id.startsWith("deal-")) return `/dashboard/leads/detail?id=${id.slice("deal-".length)}`;
+  if (id.startsWith("hot-")) return `/dashboard/calls/detail?id=${id.slice("hot-".length)}`;
+  if (id.startsWith("idle-")) return `/dashboard/telecallers/performance/detail?id=${id.slice("idle-".length)}`;
+  return null;
+}
+
 function groupByStage(leads: BoardLead[]) {
   const counts: Record<string, number> = {};
   for (const lead of leads) counts[lead.pipeline_stage] = (counts[lead.pipeline_stage] ?? 0) + 1;
@@ -74,9 +87,22 @@ function groupByStage(leads: BoardLead[]) {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Initialised client-side (matches attendance/performance pages' own
+  // pattern) to avoid an SSR/client Date hydration mismatch.
+  const [snapshotRange, setSnapshotRange] = useState<DateRange | null>(null);
+  useEffect(() => {
+    const now = new Date();
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const start = new Date(now);
+    start.setDate(start.getDate() - 6);
+    setSnapshotRange({ start: iso(start), end: iso(now) });
+  }, []);
 
   const [board, setBoard] = useState<BoardLead[] | null>(null);
   const [boardLoading, setBoardLoading] = useState(true);
@@ -101,10 +127,11 @@ export default function DashboardPage() {
   const [insightsLoading, setInsightsLoading] = useState(true);
 
   function load() {
+    if (!snapshotRange) return;
     setLoading(true);
     setError(null);
     dashboardApi
-      .snapshot()
+      .snapshot(snapshotRange)
       .then(setSnapshot)
       .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load dashboard snapshot"))
       .finally(() => setLoading(false));
@@ -171,7 +198,7 @@ export default function DashboardPage() {
       .finally(() => setInsightsLoading(false));
   }
 
-  useEffect(load, []);
+  useEffect(load, [snapshotRange]);
   useEffect(loadBoard, []);
   useEffect(() => loadRevenue(range), [range]);
   useEffect(loadGoal, []);
@@ -186,6 +213,10 @@ export default function DashboardPage() {
   const stageCounts = board ? groupByStage(board) : null;
   const inProgress = stageCounts ? ACTIVE_STAGES.reduce((s, stage) => s + (stageCounts[stage] ?? 0), 0) : null;
   const maxStageCount = stageCounts ? Math.max(1, ...Object.values(stageCounts)) : 1;
+  const activeTelecallers = teamStatus.filter((t) => t.status === "Active").length;
+  const teamCalls = teamStatus.reduce((sum, t) => sum + t.calls, 0);
+  const teamConnectRate = teamCalls ? Math.round((teamStatus.reduce((sum, t) => sum + t.connected, 0) / teamCalls) * 100) : 0;
+  const teamQuality = teamStatus.length ? Math.round(teamStatus.reduce((sum, t) => sum + t.quality, 0) / teamStatus.length) : 0;
 
   function exportSnapshotCsv() {
     const header = ["Telecaller", "Status", "Calls", "Connected", "Closed", "Quality", "Revenue Today", "Trend"];
@@ -206,7 +237,16 @@ export default function DashboardPage() {
 
   return (
     <div className="pb-10">
-      <PageHeader title="Dashboard" description="Today's numbers across leads, calls and revenue" />
+      <PageHeader
+        title="Dashboard"
+        description="A clear view of your lead flow, team output and revenue."
+        action={
+          <>
+            {snapshotRange && <DateRangePicker value={snapshotRange} onChange={setSnapshotRange} />}
+            <Button size="sm" onClick={exportSnapshotCsv}><Download className="size-3.5" /> Export</Button>
+          </>
+        }
+      />
 
       {!insightsLoading && topInsight && (
         <div className="mt-4 px-4 sm:px-6 lg:px-8">
@@ -229,35 +269,29 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-2 gap-4 px-4 sm:px-6 lg:px-8 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="mt-6 grid grid-cols-2 gap-3 px-4 sm:px-6 lg:px-8 lg:grid-cols-4">
         <StatCard
           label="Total Leads"
           value={loading ? <Skeleton className="h-6 w-12" /> : String(snapshot?.total_leads ?? 0)}
-          suffix="all time"
+          suffix="all sources"
           icon={Filter}
         />
         <StatCard
-          label="New Today"
+          label={snapshot?.ranged ? "New leads" : "New today"}
           value={loading ? <Skeleton className="h-6 w-12" /> : String(snapshot?.leads_today ?? 0)}
           icon={CheckCircle2}
         />
         <StatCard
-          label="Hot Leads"
-          value={loading ? <Skeleton className="h-6 w-12" /> : String(snapshot?.hot_leads ?? 0)}
-          note="score ≥ 80"
-          icon={Target}
-        />
-        <StatCard
           label="In Progress"
           value={boardLoading ? <Skeleton className="h-6 w-12" /> : String(inProgress ?? 0)}
-          note="in the funnel"
+          note={`${teamStatus.length || 0} telecallers assigned`}
           icon={Layers}
         />
         <StatCard
           label="Closed Deals"
           value={goalLoading ? <Skeleton className="h-6 w-12" /> : String(goal?.deals_closed ?? 0)}
-          suffix="MTD"
-          note={goal?.pct_of_target != null ? `${goal.pct_of_target}% of target` : undefined}
+          suffix="this month"
+          note={goal?.pct_of_target != null ? `${goal.pct_of_target}% of monthly target` : undefined}
           icon={Trophy}
         />
       </div>
@@ -382,14 +416,14 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="mt-4 px-4 sm:px-6 lg:px-8">
+      <div className="mt-5 px-4 sm:px-6 lg:px-8">
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-0">
             <div>
               <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <Activity className="size-4 text-primary-600" /> Telecaller Health
               </h3>
-              <p className="mt-1 text-xs text-slate-400">How the team is holding up right now</p>
+              <p className="mt-1 text-xs text-slate-400">How the team is holding up against today&apos;s targets</p>
             </div>
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm" onClick={exportSnapshotCsv}>
@@ -400,12 +434,26 @@ export default function DashboardPage() {
               </Link>
             </div>
           </div>
+          <div className="mt-5 grid grid-cols-2 border-y border-slate-100 lg:grid-cols-4">
+            {[
+              ["On the phones now", `${activeTelecallers} / ${teamStatus.length}`, teamStatus.length ? `${teamStatus.length - activeTelecallers} away or inactive` : "Loading team status"],
+              ["Calls made today", String(teamCalls), "Across the whole team"],
+              ["Average connect rate", `${teamConnectRate}%`, "Across calls attempted"],
+              ["Average call quality", `${teamQuality} / 100`, teamQuality >= 80 ? "Meeting your 80 bar" : "Below your 80 bar"],
+            ].map(([label, value, note]) => (
+              <div key={label} className="border-b border-slate-100 px-5 py-4 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+                <p className="mt-1 font-mono text-xl font-bold tracking-tight text-slate-900">{teamStatusLoading ? <Skeleton className="h-5 w-12" /> : value}</p>
+                <p className="mt-1 text-[11px] text-slate-400">{note}</p>
+              </div>
+            ))}
+          </div>
           {teamStatusError ? (
             <p className="px-5 py-6 text-sm text-red-600">{teamStatusError}</p>
           ) : !teamStatusLoading && teamStatus.length === 0 ? (
             <p className="px-5 py-6 text-sm text-slate-400">No telecallers on this team yet.</p>
           ) : (
-            <div className="mt-3 overflow-x-auto">
+            <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-y border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -462,6 +510,33 @@ export default function DashboardPage() {
 
       <div className="mt-4 px-4 sm:px-6 lg:px-8">
         <Card>
+          <div className="flex items-center justify-between gap-3 p-5 pb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Reports</h3>
+              <p className="mt-1 text-xs text-slate-400">View a current snapshot or download it when you need it.</p>
+            </div>
+            <Link href="/dashboard/insights/reports" className="text-xs font-semibold text-primary-600 hover:underline">ALL REPORTS</Link>
+          </div>
+          <div className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ["Founder weekly", "PDF · weekly", "weekly_summary"],
+              ["Telecaller scorecard", "CSV · current team", "telecaller_performance"],
+              ["Lead quality audit", "CSV · all sources", "lead_quality"],
+              ["Leakage report", "PDF · current risks", "leakage"],
+            ].map(([title, meta, report]) => (
+              <Link key={report} href={`/dashboard/insights/reports?type=${report}`} className="group rounded-lg border border-slate-200 p-3 transition-colors hover:border-primary-200 hover:bg-primary-50/40">
+                <FileText className="size-4 text-primary-500" />
+                <p className="mt-4 text-sm font-semibold text-slate-800">{title}</p>
+                <p className="mt-1 text-xs text-slate-400">{meta}</p>
+                <span className="mt-3 inline-block text-xs font-semibold text-primary-600">View report →</span>
+              </Link>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="mt-4 px-4 sm:px-6 lg:px-8">
+        <Card>
           <div className="flex flex-wrap items-center justify-between gap-2 p-5 pb-0">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <Activity className="size-4 text-primary-600" /> Live Activity
@@ -502,7 +577,15 @@ export default function DashboardPage() {
                       <span className="text-sm text-slate-500">{a.detail}</span>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!activityHref(a.id)}
+                    onClick={() => {
+                      const href = activityHref(a.id);
+                      if (href) router.push(href);
+                    }}
+                  >
                     {a.cta}
                   </Button>
                 </div>

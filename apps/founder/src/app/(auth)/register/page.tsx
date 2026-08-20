@@ -155,14 +155,10 @@ export default function RegisterPage() {
         <label className="flex items-start gap-2.5 text-sm text-slate-600">
           <input type="checkbox" defaultChecked className="mt-0.5 size-4 rounded border-slate-300 text-primary-600" />
           <span>
-            I agree to LeadPilot&apos;s{" "}
-            <Link href="#" className="font-medium text-primary-600 hover:underline">
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link href="#" className="font-medium text-primary-600 hover:underline">
-              Privacy Policy
-            </Link>
+            {/* No Terms of Service / Privacy Policy pages exist yet — a "#"
+                link here would look clickable and do nothing, so this stays
+                plain text rather than a fake affordance. */}
+            I agree to LeadPilot&apos;s Terms of Service and Privacy Policy
           </span>
         </label>
 

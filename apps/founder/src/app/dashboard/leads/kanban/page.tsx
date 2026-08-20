@@ -47,8 +47,9 @@ export default function KanbanBoardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
-  const [closingLead, setClosingLead] = useState<BoardLead | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ lead: BoardLead; stage: string; backward: boolean } | null>(null);
   const [dealValueInput, setDealValueInput] = useState("");
+  const [moveNoteInput, setMoveNoteInput] = useState("");
   const [addingLead, setAddingLead] = useState(false);
   const [newLeadName, setNewLeadName] = useState("");
   const [newLeadPhone, setNewLeadPhone] = useState("");
@@ -73,14 +74,14 @@ export default function KanbanBoardPage() {
 
   useEffect(load, []);
 
-  async function moveStage(lead: BoardLead, stage: string, dealValue?: number) {
+  async function moveStage(lead: BoardLead, stage: string, dealValue?: number, note?: string) {
     if (stage === lead.pipeline_stage) return;
     setMovingId(lead.id);
     setMoveError(null);
     const prevStage = lead.pipeline_stage;
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, pipeline_stage: stage } : l)));
     try {
-      await leadsApi.updateStage(lead.id, stage, dealValue);
+      await leadsApi.updateStage(lead.id, stage, dealValue, note);
     } catch (e) {
       // Revert on failure — don't leave the board showing a move that didn't
       // persist — but surface WHY instead of silently snapping the card back,
@@ -95,21 +96,36 @@ export default function KanbanBoardPage() {
   }
 
   function handleStagePick(lead: BoardLead, stage: string) {
-    if (stage === "Closed Won") {
-      // Revenue reporting needs a deal value to be worth anything — ask for it
-      // before persisting the move instead of silently recording ₹0.
+    const currentIdx = stages.indexOf(lead.pipeline_stage);
+    const newIdx = stages.indexOf(stage);
+    const backward = newIdx < currentIdx;
+
+    // Closed Won needs a deal value, and a backward move (including reopening
+    // a Closed Won/Lost/Junk lead) needs a note explaining why — the backend
+    // rejects a backward move without one. Either case routes through the
+    // confirm modal instead of moving immediately.
+    if (stage === "Closed Won" || backward) {
       setDealValueInput("");
-      setClosingLead(lead);
+      setMoveNoteInput("");
+      setPendingMove({ lead, stage, backward });
       return;
     }
     moveStage(lead, stage);
   }
 
-  function confirmCloseWon() {
-    if (!closingLead) return;
+  function confirmPendingMove() {
+    if (!pendingMove) return;
+    const { lead, stage, backward } = pendingMove;
+    const note = moveNoteInput.trim();
+    if (backward && !note) return;
     const value = Number(dealValueInput);
-    moveStage(closingLead, "Closed Won", Number.isFinite(value) && value > 0 ? value : undefined);
-    setClosingLead(null);
+    moveStage(
+      lead,
+      stage,
+      stage === "Closed Won" && Number.isFinite(value) && value > 0 ? value : undefined,
+      backward ? note : undefined
+    );
+    setPendingMove(null);
   }
 
   function openAddLead() {
@@ -308,14 +324,24 @@ export default function KanbanBoardPage() {
                             onChange={(e) => handleStagePick(lead, e.target.value)}
                             className="mt-2 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 disabled:opacity-50"
                           >
-                            {/* Leads can only advance — offer the current stage and
-                                everything downstream of it, never an earlier stage. */}
+                            {/* Moving forward needs no justification; moving
+                                backward (reopening a closed/junk lead included)
+                                is still allowed but the confirm modal below
+                                requires a note — the backend enforces the same
+                                rule, so this is the picker staying honest about
+                                what's about to happen, not a new restriction. */}
                             {stages.map((s, i) => {
                               const currentIdx = stages.indexOf(lead.pipeline_stage);
-                              if (i < currentIdx) return null;
+                              if (s === lead.pipeline_stage) {
+                                return (
+                                  <option key={s} value={s}>
+                                    {s}
+                                  </option>
+                                );
+                              }
                               return (
                                 <option key={s} value={s}>
-                                  {s === lead.pipeline_stage ? s : `Move to ${s}`}
+                                  {i < currentIdx ? `← Move back to ${s}` : `Move to ${s}`}
                                 </option>
                               );
                             })}
@@ -378,34 +404,60 @@ export default function KanbanBoardPage() {
       )}
 
       <Modal
-        open={closingLead !== null}
-        onClose={() => setClosingLead(null)}
-        title="Deal value"
+        open={pendingMove !== null}
+        onClose={() => setPendingMove(null)}
+        title={pendingMove?.backward ? "Move lead backward" : "Deal value"}
         footer={
           <>
-            <Button variant="outline" size="sm" onClick={() => setClosingLead(null)}>
+            <Button variant="outline" size="sm" onClick={() => setPendingMove(null)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={confirmCloseWon}>
-              Mark Closed Won
+            <Button
+              size="sm"
+              onClick={confirmPendingMove}
+              disabled={pendingMove?.backward && !moveNoteInput.trim()}
+            >
+              {pendingMove?.stage === "Closed Won" ? "Mark Closed Won" : `Move to ${pendingMove?.stage}`}
             </Button>
           </>
         }
       >
-        <p className="mb-3">
-          Moving <b>{closingLead?.name}</b> to Closed Won. Enter the deal value so it shows up in the revenue
-          dashboard (leave blank if unknown).
-        </p>
-        <input
-          autoFocus
-          type="number"
-          min={0}
-          placeholder="e.g. 85000"
-          value={dealValueInput}
-          onChange={(e) => setDealValueInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && confirmCloseWon()}
-          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-        />
+        <div className="flex flex-col gap-3">
+          {pendingMove?.stage === "Closed Won" && (
+            <div>
+              <p className="mb-2">
+                Moving <b>{pendingMove?.lead.name}</b> to Closed Won. Enter the deal value so it shows up in the
+                revenue dashboard (leave blank if unknown).
+              </p>
+              <input
+                autoFocus={!pendingMove?.backward}
+                type="number"
+                min={0}
+                placeholder="e.g. 85000"
+                value={dealValueInput}
+                onChange={(e) => setDealValueInput(e.target.value)}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              />
+            </div>
+          )}
+          {pendingMove?.backward && (
+            <div>
+              <p className="mb-2">
+                Moving <b>{pendingMove?.lead.name}</b> back from <b>{pendingMove?.lead.pipeline_stage}</b> to{" "}
+                <b>{pendingMove?.stage}</b>. Explain why — this is recorded on the lead's history.
+              </p>
+              <input
+                autoFocus
+                type="text"
+                placeholder="e.g. Founder review — deal fell through, reopening to try again"
+                value={moveNoteInput}
+                onChange={(e) => setMoveNoteInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && moveNoteInput.trim() && confirmPendingMove()}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              />
+            </div>
+          )}
+        </div>
       </Modal>
 
       <Modal

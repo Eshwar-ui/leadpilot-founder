@@ -87,25 +87,10 @@ export default function LoginPage() {
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
-          <div className="mt-2 text-right">
-            <Link href="#" className="text-xs font-medium text-primary-600 hover:underline">
-              Forgot password?
-            </Link>
-          </div>
         </div>
 
         <Button type="submit" className="w-full" disabled={submitting}>
           {submitting ? "Signing in…" : "Sign In"}
-        </Button>
-
-        <div className="flex items-center gap-3 text-xs text-slate-400">
-          <div className="h-px flex-1 bg-slate-200" />
-          or
-          <div className="h-px flex-1 bg-slate-200" />
-        </div>
-
-        <Button type="button" variant="outline" className="w-full">
-          Continue with Google
         </Button>
       </form>
 

@@ -27,7 +27,7 @@ export function StatCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border bg-white p-4 shadow-sm",
+        "rounded-xl border bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)]",
         tone === "danger" ? "border-red-200 bg-red-50/40" : "border-slate-200",
         className
       )}
@@ -36,16 +36,12 @@ export function StatCard({
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           {label}
         </span>
-        {Icon && (
-          <span className="flex size-7 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-            <Icon className="size-3.5" />
-          </span>
-        )}
+        {Icon && <Icon className="size-4 text-slate-300" />}
       </div>
       <div className="mt-2 flex items-baseline gap-1">
         <span
           className={cn(
-            "font-mono text-2xl font-bold tabular-nums",
+            "font-mono text-[1.75rem] font-bold tracking-tight tabular-nums",
             tone === "danger" ? "text-red-600" : "text-slate-900"
           )}
         >

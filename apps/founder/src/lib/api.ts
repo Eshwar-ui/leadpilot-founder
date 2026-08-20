@@ -257,12 +257,15 @@ export const leadsApi = {
   detail(leadId: string) {
     return authedRequest<LeadDetail>(`/api/leads/${leadId}`);
   },
-  updateStage(leadId: string, stage: string, dealValue?: number) {
+  updateStage(leadId: string, stage: string, dealValue?: number, note?: string) {
+    const body: Record<string, unknown> = { stage };
+    if (dealValue != null) body.deal_value = dealValue;
+    if (note) body.note = note;
     return authedRequest<{ id: string; pipeline_stage: string; deal_value: number | null }>(
       `/api/leads/${leadId}/stage`,
       {
         method: "PATCH",
-        body: JSON.stringify(dealValue != null ? { stage, deal_value: dealValue } : { stage }),
+        body: JSON.stringify(body),
       }
     );
   },
