@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, BarChart3, Inbox, Settings, FileText, X } from "lucide-react";
+import { LayoutGrid, BarChart3, Inbox, Settings, FileText, Bell, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -10,7 +10,7 @@ const NAV = [
   { label: "Telecallers", items: [{ label: "Performance Matrix", href: "/dashboard/telecallers/performance", icon: BarChart3 }] },
   { label: "Leads", items: [{ label: "All Leads", href: "/dashboard/leads", icon: Inbox }] },
   { label: "AI insights", items: [{ label: "Report Generator", href: "/dashboard/insights/reports", icon: FileText }] },
-  { label: "System", items: [{ label: "Settings", href: "/dashboard/settings", icon: Settings }] },
+  { label: "System", items: [{ label: "Notifications", href: "/dashboard/notifications", icon: Bell }, { label: "Settings", href: "/dashboard/settings", icon: Settings }] },
 ];
 
 // Exact match for "/dashboard" (the root — every other route also starts

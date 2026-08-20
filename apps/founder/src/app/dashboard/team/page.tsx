@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { UserPlus } from "lucide-react";
+import { BellRing, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -68,6 +68,13 @@ export default function ManageTeamPage() {
   const [resetTempPassword, setResetTempPassword] = useState<string | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetSubmitting, setResetSubmitting] = useState(false);
+
+  const [notifyMember, setNotifyMember] = useState<TeamMember | null>(null);
+  const [notifyTitle, setNotifyTitle] = useState("Message from your founder");
+  const [notifyMessage, setNotifyMessage] = useState("");
+  const [notifyError, setNotifyError] = useState<string | null>(null);
+  const [notifySubmitting, setNotifySubmitting] = useState(false);
+  const [notifySent, setNotifySent] = useState(false);
 
   function loadTeam() {
     setLoading(true);
@@ -136,6 +143,34 @@ export default function ManageTeamPage() {
       setResetError(e instanceof ApiError ? e.message : "Failed to reset password");
     } finally {
       setResetSubmitting(false);
+    }
+  }
+
+  function openNotification(member: TeamMember) {
+    setNotifyMember(member);
+    setNotifyTitle("Message from your founder");
+    setNotifyMessage("");
+    setNotifyError(null);
+    setNotifySent(false);
+  }
+
+  async function submitNotification() {
+    if (!notifyMember) return;
+    const title = notifyTitle.trim();
+    const message = notifyMessage.trim();
+    if (!title || !message) {
+      setNotifyError("Enter both a title and message");
+      return;
+    }
+    setNotifySubmitting(true);
+    setNotifyError(null);
+    try {
+      await teamApi.sendNotification(notifyMember.id, { title, message });
+      setNotifySent(true);
+    } catch (e) {
+      setNotifyError(e instanceof ApiError ? e.message : "Failed to send notification");
+    } finally {
+      setNotifySubmitting(false);
     }
   }
 
@@ -267,12 +302,22 @@ export default function ManageTeamPage() {
                       </td>
                       <td className="px-5 py-3 text-right text-xs text-slate-500">{formatLastActive(m.last_active)}</td>
                       <td className="px-5 py-3 text-right">
-                        <button
-                          className="text-xs font-semibold text-primary-600 hover:underline"
-                          onClick={() => openResetPassword(m)}
-                        >
-                          Reset Password
-                        </button>
+                        <div className="flex items-center justify-end gap-3">
+                          {m.role === "telecaller" && m.status === "Active" && (
+                            <button
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:underline"
+                              onClick={() => openNotification(m)}
+                            >
+                              <BellRing className="size-3.5" /> Notify
+                            </button>
+                          )}
+                          <button
+                            className="text-xs font-semibold text-primary-600 hover:underline"
+                            onClick={() => openResetPassword(m)}
+                          >
+                            Reset Password
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -364,6 +409,67 @@ export default function ManageTeamPage() {
                 <option value="ad_manager">Ad Manager</option>
                 <option value="admin">Admin</option>
               </select>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={notifyMember !== null}
+        onClose={() => setNotifyMember(null)}
+        title={notifySent ? "Notification sent" : `Notify ${notifyMember?.name ?? "telecaller"}`}
+        footer={
+          notifySent ? (
+            <Button size="sm" className="w-full" onClick={() => setNotifyMember(null)}>
+              Done
+            </Button>
+          ) : (
+            <>
+              <Button size="sm" variant="outline" className="flex-1" onClick={() => setNotifyMember(null)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={submitNotification}
+                disabled={notifySubmitting || !notifyTitle.trim() || !notifyMessage.trim()}
+              >
+                {notifySubmitting ? "Sending…" : "Send Notification"}
+              </Button>
+            </>
+          )
+        }
+      >
+        {notifySent ? (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800">
+            The notification was accepted by Firebase for {notifyMember?.name}&apos;s registered device.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {notifyError && <p className="text-xs font-medium text-red-600">{notifyError}</p>}
+            <p className="text-xs text-slate-500">
+              This sends a push only to this telecaller. They must have opened and signed in to the mobile app at least once.
+            </p>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Title</label>
+              <input
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                value={notifyTitle}
+                maxLength={80}
+                onChange={(e) => setNotifyTitle(e.target.value)}
+              />
+              <p className="mt-1 text-right text-[11px] text-slate-400">{notifyTitle.length}/80</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">Message</label>
+              <textarea
+                className="min-h-28 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                value={notifyMessage}
+                maxLength={240}
+                onChange={(e) => setNotifyMessage(e.target.value)}
+                placeholder="Write a short update for this telecaller"
+              />
+              <p className="mt-1 text-right text-[11px] text-slate-400">{notifyMessage.length}/240</p>
             </div>
           </div>
         )}

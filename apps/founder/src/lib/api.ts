@@ -193,6 +193,15 @@ export const teamApi = {
       body: JSON.stringify(newPassword ? { new_password: newPassword } : {}),
     });
   },
+  sendNotification(userId: string, input: { title: string; message: string }) {
+    return authedRequest<{ sent: boolean; recipient_id: string; recipient_name: string }>(
+      `/api/team/${userId}/notification`,
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      }
+    );
+  },
 };
 
 export type BoardLead = {
@@ -366,6 +375,20 @@ export type TelecallerPerformanceDetail = TelecallerPerformance & {
   leads_assigned: AssignedLead[];
 };
 
+export type TelecallerCallLogEntry = {
+  call_id: string;
+  timestamp: string;
+  lead_verdict: string | null;
+  total_score: number | null;
+};
+
+export type TelecallerCallLogResponse = {
+  calls: TelecallerCallLogEntry[];
+  total: number;
+  skip: number;
+  limit: number;
+};
+
 export type TeamHealthStatus = "Active" | "Break" | "Inactive" | "Absent";
 
 export type TeamHealthEntry = {
@@ -395,6 +418,15 @@ export const telecallersApi = {
   performanceDetail(telecallerId: string, range?: { start: string; end: string }) {
     const qs = range ? `?start=${range.start}&end=${range.end}` : "";
     return authedRequest<TelecallerPerformanceDetail>(`/api/telecallers/performance/${telecallerId}${qs}`);
+  },
+  callLog(telecallerId: string, opts?: { start?: string; end?: string; skip?: number; limit?: number }) {
+    const params = new URLSearchParams();
+    if (opts?.start) params.set("start", opts.start);
+    if (opts?.end) params.set("end", opts.end);
+    if (opts?.skip) params.set("skip", String(opts.skip));
+    if (opts?.limit) params.set("limit", String(opts.limit));
+    const qs = params.toString();
+    return authedRequest<TelecallerCallLogResponse>(`/api/telecallers/performance/${telecallerId}/calls${qs ? `?${qs}` : ""}`);
   },
   status() {
     return authedRequest<TeamHealthResponse>("/api/telecallers/status");
@@ -460,6 +492,42 @@ export const dashboardApi = {
   },
   activity() {
     return authedRequest<{ events: ActivityEvent[] }>("/api/dashboard/activity");
+  },
+};
+
+export type NotificationSeverity = "success" | "info" | "warning" | "danger";
+
+export type FounderNotification = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  severity: NotificationSeverity;
+  entity_type: string | null;
+  entity_id: string | null;
+  actor_name: string | null;
+  created_at: string | null;
+  read_at: string | null;
+};
+
+export type NotificationsResponse = {
+  notifications: FounderNotification[];
+  unread_count: number;
+};
+
+export const notificationsApi = {
+  list(params?: { unreadOnly?: boolean; limit?: number }) {
+    const query = new URLSearchParams();
+    if (params?.unreadOnly) query.set("unread_only", "true");
+    if (params?.limit) query.set("limit", String(params.limit));
+    const qs = query.toString();
+    return authedRequest<NotificationsResponse>(`/api/notifications${qs ? `?${qs}` : ""}`);
+  },
+  markRead(notificationId: string) {
+    return authedRequest<FounderNotification>(`/api/notifications/${notificationId}/read`, { method: "PATCH" });
+  },
+  markAllRead() {
+    return authedRequest<{ marked_read: number }>("/api/notifications/read-all", { method: "POST" });
   },
 };
 

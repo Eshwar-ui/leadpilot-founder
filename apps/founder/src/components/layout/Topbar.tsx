@@ -3,23 +3,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, AlertTriangle, BarChart3, Bell, ChevronRight, Inbox, Info, LogOut, Menu, Search, Users2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, BarChart3, Bell, CheckCircle2, ChevronRight, Inbox, Info, LogOut, Menu, Search, Users2 } from "lucide-react";
 import { clearSession, getStoredUser } from "@/lib/auth";
 import { markReachable } from "@/lib/connectivity";
 import {
-  insightsApi,
   leadsApi,
+  notificationsApi,
   telecallersApi,
   type AuthUser,
   type BoardLead,
-  type Insight,
+  type FounderNotification,
+  type NotificationSeverity,
   type TelecallerPerformance,
 } from "@/lib/api";
 
-const severityMeta: Record<Insight["severity"], { icon: typeof Info; ring: string; text: string; label: string }> = {
-  high: { icon: AlertTriangle, ring: "bg-red-50 text-red-600", text: "text-red-600", label: "Critical" },
-  medium: { icon: AlertCircle, ring: "bg-amber-50 text-amber-600", text: "text-amber-600", label: "Alert" },
-  low: { icon: Info, ring: "bg-blue-50 text-blue-600", text: "text-blue-600", label: "Notice" },
+const severityMeta: Record<NotificationSeverity, { icon: typeof Info; ring: string; text: string; label: string }> = {
+  success: { icon: CheckCircle2, ring: "bg-emerald-50 text-emerald-600", text: "text-emerald-600", label: "Update" },
+  danger: { icon: AlertTriangle, ring: "bg-red-50 text-red-600", text: "text-red-600", label: "Action" },
+  warning: { icon: AlertCircle, ring: "bg-amber-50 text-amber-600", text: "text-amber-600", label: "Watch" },
+  info: { icon: Info, ring: "bg-blue-50 text-blue-600", text: "text-blue-600", label: "Activity" },
 };
 
 export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
@@ -27,7 +29,8 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   // Live date, set client-side to avoid a hydration mismatch (was a hardcoded
   // "Tue, 23 Jun 2026" from mock-data.ts).
   const [today, setToday] = useState("");
-  const [notifications, setNotifications] = useState<Insight[]>([]);
+  const [notifications, setNotifications] = useState<FounderNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -52,14 +55,22 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
     );
   }, []);
 
-  // Notifications reuse the same rule-based insights the dashboard surfaces —
-  // there's no separate notifications endpoint, and these are exactly the
-  // "things that need the founder's attention" the bell should show.
   useEffect(() => {
-    insightsApi
-      .list()
-      .then((res) => setNotifications(res.insights))
-      .catch(() => setNotifications([]));
+    function loadNotifications() {
+      notificationsApi
+        .list({ limit: 8 })
+        .then((res) => {
+          setNotifications(res.notifications);
+          setUnreadCount(res.unread_count);
+        })
+        .catch(() => {
+          setNotifications([]);
+          setUnreadCount(0);
+        });
+    }
+    loadNotifications();
+    const id = window.setInterval(loadNotifications, 30_000);
+    return () => window.clearInterval(id);
   }, []);
 
   // Close the dropdown on an outside click so it behaves like a normal menu.
@@ -148,6 +159,22 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
     // "can't reach server" banner.
     markReachable();
     router.push("/login");
+  }
+
+  function openNotification(notification: FounderNotification) {
+    setNotifOpen(false);
+    if (!notification.read_at) {
+      notificationsApi.markRead(notification.id).catch(() => undefined);
+      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read_at: new Date().toISOString() } : item));
+      setUnreadCount((count) => Math.max(0, count - 1));
+    }
+    if (notification.entity_type === "lead" && notification.entity_id) {
+      router.push(`/dashboard/leads/detail?id=${notification.entity_id}`);
+    } else if (notification.entity_type === "telecaller" && notification.entity_id) {
+      router.push(`/dashboard/telecallers/performance/detail?id=${notification.entity_id}`);
+    } else {
+      router.push("/dashboard/notifications");
+    }
   }
 
   const orgName = user?.org_name ?? "";
@@ -271,9 +298,9 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
             className="relative flex size-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
           >
             <Bell className="size-4" />
-            {notifications.length > 0 && (
+            {unreadCount > 0 && (
               <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
-                {notifications.length > 9 ? "9+" : notifications.length}
+                {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
           </button>
@@ -282,9 +309,9 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-slate-900">Notifications</span>
-                  {notifications.length > 0 && (
+                  {unreadCount > 0 && (
                     <span className="rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-bold text-primary-700">
-                      {notifications.length}
+                      {unreadCount}
                     </span>
                   )}
                 </div>
@@ -300,14 +327,13 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
               ) : (
                 <div className="max-h-[24rem] divide-y divide-slate-50 overflow-auto">
                   {notifications.map((n) => {
-                    const meta = severityMeta[n.severity];
+                    const meta = severityMeta[n.severity] ?? severityMeta.info;
                     const Icon = meta.icon;
                     return (
                       <button
                         key={n.id}
                         onClick={() => {
-                          setNotifOpen(false);
-                          router.push("/dashboard/insights/feed");
+                          openNotification(n);
                         }}
                         className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50"
                       >
@@ -318,10 +344,10 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
                           <span className="flex items-center gap-1.5">
                             <span className={`text-[10px] font-bold uppercase tracking-wide ${meta.text}`}>{meta.label}</span>
                             <span className="text-[10px] font-medium uppercase tracking-wide text-slate-300">·</span>
-                            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{n.category}</span>
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{n.actor_name ?? "System"}</span>
                           </span>
-                          <span className="mt-0.5 block text-sm font-semibold leading-snug text-slate-900">{n.title}</span>
-                          <span className="mt-0.5 line-clamp-2 block text-xs text-slate-500">{n.description}</span>
+                          <span className={`mt-0.5 block text-sm leading-snug ${n.read_at ? "font-medium text-slate-700" : "font-semibold text-slate-900"}`}>{n.title}</span>
+                          <span className="mt-0.5 line-clamp-2 block text-xs text-slate-500">{n.message}</span>
                         </span>
                       </button>
                     );
@@ -331,11 +357,11 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
               <button
                 onClick={() => {
                   setNotifOpen(false);
-                  router.push("/dashboard/insights/feed");
+                  router.push("/dashboard/notifications");
                 }}
                 className="flex w-full items-center justify-center gap-1 border-t border-slate-100 px-4 py-2.5 text-xs font-semibold text-primary-600 transition-colors hover:bg-primary-50"
               >
-                View all insights <ChevronRight className="size-3.5" />
+                View all notifications <ChevronRight className="size-3.5" />
               </button>
             </div>
           )}
