@@ -11,7 +11,14 @@ import { ApiError, orgApi, type OrgProfile } from "@/lib/api";
 // Placeholders show the insights engine's built-in defaults (see
 // app/api/dashboard.py _alert_config) so a blank field clearly means "use
 // default", not "zero".
-const ALERT_DEFAULTS = { wastage_days: 3, zombie_days: 7, performance_gap: 15, quality_floor: 40 };
+const ALERT_DEFAULTS = {
+  wastage_days: 3,
+  zombie_days: 7,
+  performance_gap: 15,
+  quality_floor: 40,
+  break_threshold_min: 15,
+  inactive_threshold_min: 45,
+};
 
 const ALERT_FIELDS: { key: keyof typeof ALERT_DEFAULTS; label: string; hint: string; min: number; max: number; usedIn: string }[] = [
   {
@@ -46,6 +53,22 @@ const ALERT_FIELDS: { key: keyof typeof ALERT_DEFAULTS; label: string; hint: str
     max: 100,
     usedIn: "The Insight Feed's lead-quality flags",
   },
+  {
+    key: "break_threshold_min",
+    label: "Break Threshold (Minutes)",
+    hint: "A checked-in telecaller with no call in this long shows as “Break” instead of “Active”.",
+    min: 1,
+    max: 180,
+    usedIn: "The Team Health board and Telecaller Detail's live status",
+  },
+  {
+    key: "inactive_threshold_min",
+    label: "Inactive Threshold (Minutes)",
+    hint: "A checked-in telecaller with no call in this long shows as “Inactive”. Must be longer than the Break threshold above.",
+    min: 1,
+    max: 480,
+    usedIn: "The Team Health board and Telecaller Detail's live status",
+  },
 ];
 
 export default function AlertConfigPage() {
@@ -71,7 +94,14 @@ export default function AlertConfigPage() {
   function updateField(key: keyof typeof ALERT_DEFAULTS, value: number | null) {
     setProfile((prev) => {
       if (!prev) return prev;
-      const current = prev.alert_config ?? { wastage_days: null, zombie_days: null, performance_gap: null, quality_floor: null };
+      const current = prev.alert_config ?? {
+        wastage_days: null,
+        zombie_days: null,
+        performance_gap: null,
+        quality_floor: null,
+        break_threshold_min: null,
+        inactive_threshold_min: null,
+      };
       return { ...prev, alert_config: { ...current, [key]: value } };
     });
     setSaved(false);

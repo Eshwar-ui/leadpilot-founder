@@ -115,6 +115,8 @@ export type AlertConfig = {
   zombie_days: number | null;
   performance_gap: number | null;
   quality_floor: number | null;
+  break_threshold_min: number | null;
+  inactive_threshold_min: number | null;
 };
 
 export type OrgProfile = {
