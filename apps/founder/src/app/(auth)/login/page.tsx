@@ -39,7 +39,7 @@ export default function LoginPage() {
     <AuthShell
       headline={
         <>
-          Predict the future of your <span className="text-amber-400">pipeline</span>
+          Predict the future of your <span className="text-gold-400">pipeline</span>
         </>
       }
       description="LeadPilot uses deep learning to identify your next best customers before your competitors do."
@@ -74,7 +74,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder="alex@acme.inc"
-            className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-500 focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-100"
+            className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-500 focus:border-gold-600 focus:outline-none focus:ring-2 focus:ring-gold-100"
           />
         </div>
 
@@ -95,7 +95,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="••••••••"
-              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 pr-12 text-sm placeholder:text-slate-500 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 pr-12 text-sm placeholder:text-slate-500 focus:border-gold-600 focus:outline-none focus:ring-2 focus:ring-gold-100"
             />
             <button
               type="button"
@@ -113,7 +113,7 @@ export default function LoginPage() {
 
         <Button
           type="submit"
-          className="w-full bg-amber-500 text-navy-950 hover:bg-amber-400 focus-visible:outline-amber-500"
+          className="w-full bg-gold-500 text-navy-950 hover:bg-gold-400 focus-visible:outline-gold-500"
           disabled={submitting}
         >
           {submitting ? "Signing in…" : "Sign In"}
@@ -122,7 +122,7 @@ export default function LoginPage() {
 
       <p className="mt-6 text-center text-sm text-slate-600">
         Don&apos;t have an account?{" "}
-        <Link href="/register" className="font-semibold text-amber-700 hover:underline">
+        <Link href="/register" className="font-semibold text-gold-700 hover:underline">
           Create one →
         </Link>
       </p>

@@ -181,11 +181,11 @@ export default function RegisterPage() {
     <AuthShell
       headline={
         <>
-          Turn cold emails into <span className="text-amber-400">warm intros</span>
+          Turn cold emails into <span className="text-gold-400">warm intros</span>
         </>
       }
       description="Our agents research your prospects, write personalized outreach, and book meetings in your sleep."
-      badges={[{ label: "Hyper-personalization Active", tone: "amber" }]}
+      badges={[{ label: "Hyper-personalization Active", tone: "gold" }]}
     >
       <h2 className="text-3xl font-bold text-slate-900">Create your account</h2>
       <p className="mt-2 text-sm text-slate-600">Set up your organisation and invite your team in minutes</p>
@@ -213,7 +213,7 @@ export default function RegisterPage() {
             onChange={(e) => setName(e.target.value)}
             required
             placeholder="Alex Rivera"
-            className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-500 focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-100"
+            className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-500 focus:border-gold-600 focus:outline-none focus:ring-2 focus:ring-gold-100"
           />
         </div>
 
@@ -236,7 +236,7 @@ export default function RegisterPage() {
             aria-invalid={fieldErrors.orgName ? true : undefined}
             aria-describedby={fieldErrors.orgName ? `${orgNameId}-error` : `${orgNameId}-hint`}
             placeholder="Acme Realty"
-            className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-500 focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-100"
+            className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-500 focus:border-gold-600 focus:outline-none focus:ring-2 focus:ring-gold-100"
           />
           {fieldErrors.orgName ? (
             <p id={`${orgNameId}-error`} role="alert" className="mt-1 text-xs font-medium text-red-600">
@@ -265,7 +265,7 @@ export default function RegisterPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder="alex@company.com"
-            className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-500 focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-100"
+            className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-500 focus:border-gold-600 focus:outline-none focus:ring-2 focus:ring-gold-100"
           />
         </div>
 
@@ -289,7 +289,7 @@ export default function RegisterPage() {
               aria-invalid={fieldErrors.password ? true : undefined}
               aria-describedby={fieldErrors.password ? `${passwordId}-error` : password ? strengthId : undefined}
               placeholder="••••••••"
-              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 pr-12 text-sm placeholder:text-slate-500 focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-100"
+              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 pr-12 text-sm placeholder:text-slate-500 focus:border-gold-600 focus:outline-none focus:ring-2 focus:ring-gold-100"
             />
             <button
               type="button"
@@ -353,7 +353,7 @@ export default function RegisterPage() {
             aria-invalid={fieldErrors.confirmPassword ? true : undefined}
             aria-describedby={fieldErrors.confirmPassword ? `${confirmId}-error` : undefined}
             placeholder="••••••••"
-            className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-500 focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-100"
+            className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-500 focus:border-gold-600 focus:outline-none focus:ring-2 focus:ring-gold-100"
           />
           {fieldErrors.confirmPassword && (
             <p id={`${confirmId}-error`} role="alert" className="mt-1 text-xs font-medium text-red-600">
@@ -371,7 +371,7 @@ export default function RegisterPage() {
               onChange={(e) => setAgreed(e.target.checked)}
               aria-invalid={fieldErrors.terms ? true : undefined}
               aria-describedby={fieldErrors.terms ? `${termsId}-error` : undefined}
-              className="mt-0.5 size-4 rounded border-slate-300 accent-amber-600"
+              className="mt-0.5 size-4 rounded border-slate-300 accent-gold-600"
             />
             <label htmlFor={termsId}>
               {/* /privacy is a real page now (app/privacy/page.tsx), so the
@@ -385,7 +385,7 @@ export default function RegisterPage() {
                 href="/privacy"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-semibold text-amber-700 hover:underline"
+                className="font-semibold text-gold-700 hover:underline"
               >
                 Privacy Policy
               </Link>
@@ -402,7 +402,7 @@ export default function RegisterPage() {
             dead. Submitting surfaces the checkbox error instead. */}
         <Button
           type="submit"
-          className="w-full bg-amber-500 text-navy-950 hover:bg-amber-400 focus-visible:outline-amber-500"
+          className="w-full bg-gold-500 text-navy-950 hover:bg-gold-400 focus-visible:outline-gold-500"
           disabled={submitting}
         >
           {submitting ? "Creating account…" : "Create Account"}
@@ -413,7 +413,7 @@ export default function RegisterPage() {
 
       <p className="mt-2 text-center text-sm text-slate-600">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-amber-700 hover:underline">
+        <Link href="/login" className="font-semibold text-gold-700 hover:underline">
           Sign in
         </Link>
       </p>

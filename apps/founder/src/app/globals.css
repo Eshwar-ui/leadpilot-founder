@@ -13,6 +13,21 @@
   --color-primary-500: #6b82f9;
   --color-primary-600: #4f6ef2;
   --color-primary-700: #3d59db;
+
+  /* Gold brand accent — used on the auth + onboarding flow (Topbar mark,
+     CTAs, focus rings, selected states, the signal-lock hero panel). Same
+     values as Tailwind's stock amber-* scale, named as a token so a re-tweak
+     is a one-line change here instead of a multi-file grep/replace across
+     every screen that uses it. Named "gold", not "accent" — Tailwind already
+     owns `accent-*` for the CSS accent-color utility (see the checkbox in
+     register/page.tsx), and reusing that word as a color name would read as
+     the same thing twice. */
+  --color-gold-50: #fffbeb;
+  --color-gold-100: #fef3c7;
+  --color-gold-400: #fbbf24;
+  --color-gold-500: #f59e0b;
+  --color-gold-600: #d97706;
+  --color-gold-700: #b45309;
 }
 
 @theme inline {
@@ -30,6 +45,13 @@
   --color-primary-500: var(--color-primary-500);
   --color-primary-600: var(--color-primary-600);
   --color-primary-700: var(--color-primary-700);
+
+  --color-gold-50: var(--color-gold-50);
+  --color-gold-100: var(--color-gold-100);
+  --color-gold-400: var(--color-gold-400);
+  --color-gold-500: var(--color-gold-500);
+  --color-gold-600: var(--color-gold-600);
+  --color-gold-700: var(--color-gold-700);
 }
 
 body {
