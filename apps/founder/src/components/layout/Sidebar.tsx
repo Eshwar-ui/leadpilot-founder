@@ -2,42 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutGrid,
-  BarChart3,
-  CalendarCheck,
-  GraduationCap,
-  GitCompare,
-  Users2,
-  Inbox,
-  KanbanSquare,
-  Gauge,
-  TrendingDown,
-  Ghost,
-  Sparkles,
-  Settings,
-  FileText,
-  Bell,
-  ShieldCheck,
-  X,
-} from "lucide-react";
+import { LayoutGrid, BarChart3, Inbox, Settings, FileText, Bell, ShieldCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Every group used to hold exactly ONE item while 20+ built, working, live-API
-// routes had no inbound link anywhere and were reachable only by typing the
-// URL. Notably /dashboard/team is the sole UI for reset-password and
-// send-notification, so both features were dead in the shipped build.
-//
-// Deliberately NOT listed here:
-//   - /dashboard/campaigns — a "Coming Soon" stub with no backing integration;
-//     linking it would advertise a feature that does not exist yet.
-//   - /dashboard/settings/users — reachable from the Settings index as
-//     "Users & Roles". It is a sibling of Manage Team, not a duplicate (it owns
-//     role edit + activate/deactivate; Manage Team owns invite + reset password
-//     + notify), but surfacing two near-identical rosters at the same nav level
-//     would just make founders guess which one to click.
-//   - detail/drill-down routes (lead detail, call detail, telecaller detail),
-//     which are reached by clicking a row and would be dead ends from a nav.
+// Intentionally one link per group — Attendance, Coaching, Comparison, Manage
+// Team, Pipeline Board, Lead Quality, Budget Wastage, Zombie Leads, and
+// Insight Feed are all built and live, just not linked from here. They stay
+// reachable by URL; this list is the deliberately short version.
 const NAV = [
   {
     label: "Overview",
@@ -45,35 +16,15 @@ const NAV = [
   },
   {
     label: "Telecallers",
-    items: [
-      { label: "Performance Matrix", href: "/dashboard/telecallers/performance", icon: BarChart3 },
-      { label: "Attendance", href: "/dashboard/telecallers/attendance", icon: CalendarCheck },
-      { label: "Coaching", href: "/dashboard/telecallers/coaching", icon: GraduationCap },
-      { label: "Comparison", href: "/dashboard/telecallers/comparison", icon: GitCompare },
-      { label: "Manage Team", href: "/dashboard/team", icon: Users2 },
-    ],
+    items: [{ label: "Performance Matrix", href: "/dashboard/telecallers/performance", icon: BarChart3 }],
   },
   {
     label: "Leads",
-    items: [
-      { label: "All Leads", href: "/dashboard/leads", icon: Inbox },
-      { label: "Pipeline Board", href: "/dashboard/leads/kanban", icon: KanbanSquare },
-      { label: "Lead Quality", href: "/dashboard/leads/quality", icon: Gauge },
-    ],
-  },
-  {
-    label: "Leakage",
-    items: [
-      { label: "Budget Wastage", href: "/dashboard/leakage/wastage", icon: TrendingDown },
-      { label: "Zombie Leads", href: "/dashboard/leakage/zombie", icon: Ghost },
-    ],
+    items: [{ label: "All Leads", href: "/dashboard/leads", icon: Inbox }],
   },
   {
     label: "AI insights",
-    items: [
-      { label: "Insight Feed", href: "/dashboard/insights/feed", icon: Sparkles },
-      { label: "Report Generator", href: "/dashboard/insights/reports", icon: FileText },
-    ],
+    items: [{ label: "Report Generator", href: "/dashboard/insights/reports", icon: FileText }],
   },
   {
     label: "System",
