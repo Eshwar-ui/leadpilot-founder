@@ -1,4 +1,11 @@
 # LeadPilot founder portal is a private, authenticated application.
 # There is no public content to index — disallow all crawlers.
+#
+# EXCEPT /privacy: the Play Store listing for the LeadPilot telecaller app
+# points at this URL as its privacy policy, and Google's review crawler must
+# be able to fetch and index it. An `Allow` for a more specific path beats the
+# blanket `Disallow: /` below, but only if it comes FIRST for crawlers that
+# read rules in order — do not move it below the Disallow.
 User-agent: *
+Allow: /privacy
 Disallow: /

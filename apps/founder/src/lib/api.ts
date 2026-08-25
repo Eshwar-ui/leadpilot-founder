@@ -27,6 +27,54 @@ export class ApiError extends Error {
   }
 }
 
+// FastAPI speaks two different `detail` shapes. HTTPException sends a string;
+// a Pydantic validation failure sends an ARRAY of {loc, msg, type} objects
+// (see app/main.py's RequestValidationError handler). Passing that array
+// straight into Error() stringifies it to the literal "[object Object]", which
+// is what every form in this app used to show on a 422. Flatten it, and give
+// the status codes that carry no useful detail some human copy.
+function humanizeError(status: number, detail: unknown): string {
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((e) => {
+        const d = e as { loc?: unknown[]; msg?: string };
+        if (!d?.msg) return null;
+        // loc looks like ["body", "new_password"] — the last segment is the field.
+        const field = Array.isArray(d.loc)
+          ? d.loc.filter((p) => p !== "body" && p !== "query").at(-1)
+          : undefined;
+        const label = typeof field === "string" ? prettyField(field) : null;
+        return label ? `${label}: ${d.msg}` : d.msg;
+      })
+      .filter(Boolean);
+    if (msgs.length) return msgs.join(". ");
+  }
+  if (typeof detail === "string" && detail) return detail;
+
+  switch (status) {
+    case 401:
+      return "Your session has expired. Sign in again to continue.";
+    case 403:
+      return "You don't have access to this. Ask a founder or admin on your team.";
+    case 404:
+      return "We couldn't find that — it may have been deleted.";
+    case 409:
+      return "That conflicts with something that already exists.";
+    case 429:
+      return "Too many attempts. Wait a minute and try again.";
+    case 503:
+      return "The server is busy right now. Try again in a moment.";
+    default:
+      return status >= 500
+        ? "Something went wrong on our end. Try again, or contact support if it keeps happening."
+        : "That didn't work. Check your details and try again.";
+  }
+}
+
+function prettyField(field: string): string {
+  return field.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
@@ -56,7 +104,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new ApiError(res.status, body?.detail ?? `Request failed (${res.status})`);
+    throw new ApiError(res.status, humanizeError(res.status, body?.detail));
   }
   return res.json() as Promise<T>;
 }
@@ -228,6 +276,8 @@ export type Touchpoint = {
   lead_verdict: string | null;
   score: number | null;
   summary: string | null;
+  // Real per-call sentiment — the same field the mobile app's history shows.
+  sentiment: string | null;
 };
 
 export type ScoreHistoryPoint = { timestamp: string | null; score: number };
@@ -241,12 +291,15 @@ export type LeadFollowUp = { note: string | null; due_at: string | null };
 export type DuplicateLead = { id: string; name: string; pipeline_stage: string };
 
 export type LeadDetail = {
-  id: string;
+  // NULLABLE: a contact with calls but no Lead row returns id: null and
+  // pipeline_stage: null (a documented, supported path in the backend).
+  // Guard before calling .slice()/.startsWith() on either.
+  id: string | null;
   name: string;
   phone: string | null;
   reason: string | null;
   source: string | null;
-  pipeline_stage: string;
+  pipeline_stage: string | null;
   deal_value: number | null;
   score: number | null;
   telecaller_name: string | null;
@@ -270,7 +323,13 @@ export const leadsApi = {
     const body: Record<string, unknown> = { stage };
     if (dealValue != null) body.deal_value = dealValue;
     if (note) body.note = note;
-    return authedRequest<{ id: string; pipeline_stage: string; deal_value: number | null }>(
+    return authedRequest<{
+      id: string;
+      pipeline_stage: string;
+      deal_value: number | null;
+      list_price: number | null;
+      discount_pct: number | null;
+    }>(
       `/api/leads/${leadId}/stage`,
       {
         method: "PATCH",
@@ -314,16 +373,21 @@ export const leadsApi = {
   },
 };
 
+// Six dimensions, not five — quality is a /110 composite (5 x 20 + punctuality x 10).
 export type ScoreDimensions = {
   opening: number;
   discovery: number;
   pitch: number;
   objection_handling: number;
   closing: number;
+  punctuality: number;
 };
 
 export type TelecallerMetrics = {
   calls: number;
+  connected: number;
+  closed_won: number;
+  revenue: number;
   connect_pct: number;
   positive_pct: number;
   close_pct: number;
@@ -345,15 +409,15 @@ export type TelecallerPerformanceResponse = {
 
 export type TelecallerCallSummary = {
   call_id: string;
-  timestamp: string;
-  lead_verdict: string;
-  total_score: number;
+  timestamp: string | null;
+  lead_verdict: string | null;
+  total_score: number | null;
 };
 
 export type TelecallerTimelineEntry = {
   call_id: string;
-  timestamp: string;
-  lead_verdict: string;
+  timestamp: string | null;
+  lead_verdict: string | null;
 };
 
 export type DailyCallCount = { date: string; count: number };
@@ -377,7 +441,7 @@ export type TelecallerPerformanceDetail = TelecallerPerformance & {
 
 export type TelecallerCallLogEntry = {
   call_id: string;
-  timestamp: string;
+  timestamp: string | null;
   lead_verdict: string | null;
   total_score: number | null;
 };
@@ -582,6 +646,9 @@ export type WastedLead = {
 export type LeadWastage = {
   leads: WastedLead[];
   total_wasted: number;
+  // The org's configured `wastage_days`. Mirrors ZombieLeads.threshold_days —
+  // render this rather than hardcoding a cutoff the server doesn't agree with.
+  threshold_days: number;
 };
 
 export type ZombieLead = {
@@ -620,7 +687,7 @@ export type AttendanceStatus = "completed" | "on_shift" | "auto_closed";
 export type AttendanceRecord = {
   id: string;
   user_id: string;
-  telecaller_name: string;
+  telecaller_name: string | null;
   date: string;
   check_in_at: string | null;
   check_out_at: string | null;
@@ -686,7 +753,11 @@ export const reportsApi = {
   },
 };
 
-export type ScoreRing = { value: number; max: number; trend: "up" | "down" | null };
+// `trend` is a POINT DELTA vs this contact's previous call, not a direction
+// string — see score_trend() in app/utils/lead_intelligence.py, which returns
+// Optional[int]. It was typed "up" | "down" here, so every `trend === "up"`
+// check was dead code and the arrows never rendered. null = no prior call.
+export type ScoreRing = { value: number; max: number; trend: number | null };
 
 export type ScoreEvidence = { turn: number; t: string; speaker: string; text: string };
 
@@ -732,6 +803,29 @@ export type CallScore = {
   strengths: string[];
   improvements: string[];
   sentiment_timeline: { segments: SentimentTimelineSegment[]; caption: string };
+  // "failed" means the numbers below are the zeroed placeholder the backend
+  // persists when analysis errored (app/api/calls.py) — NOT a real 0/100.
+  // Render greyed bars plus a retry banner, never a legitimate score.
+  analysis_status: string | null;
+  analysis_error: string | null;
+};
+
+export type ProcessingStageKey = "upload" | "transcribe" | "analyse" | "done";
+export type ProcessingStageStatus = "done" | "active" | "pending" | "failed";
+
+export type ProcessingStage = {
+  key: ProcessingStageKey;
+  label: string;
+  status: ProcessingStageStatus;
+};
+
+export type ProcessingStatus = {
+  call_id: string;
+  current_stage: ProcessingStageKey;
+  percent: number;
+  failed: boolean;
+  error: string | null;
+  stages: ProcessingStage[];
 };
 
 export type CallSummary = {
@@ -799,7 +893,9 @@ export type TranscriptTurn = {
   timestamp: string; // "MM:SS"
 };
 
-export type TranscriptResponse = { call_id: string; transcript: { turns: TranscriptTurn[] } | null };
+// `transcript` is never null — the backend returns {} (no `turns` key) for a
+// call that hasn't been transcribed yet. Check `transcript?.turns?.length`.
+export type TranscriptResponse = { call_id: string; transcript: { turns?: TranscriptTurn[] } | null };
 
 export type TranslatedTranscriptResponse = {
   call_id: string;
@@ -816,6 +912,12 @@ export const callsApi = {
   },
   score(callId: string) {
     return authedRequest<CallScore>(`/api/calls/${callId}/score`);
+  },
+  // Upload → Transcribe → Analyse → Done. Poll this while a call's pipeline is
+  // still running so the UI can show progress instead of the raw 404 that
+  // /score and /lead-analysis return until analysis completes.
+  processingStatus(callId: string) {
+    return authedRequest<ProcessingStatus>(`/api/calls/${callId}/processing-status`);
   },
   transcript(callId: string) {
     return authedRequest<TranscriptResponse>(`/api/calls/${callId}/transcript`);

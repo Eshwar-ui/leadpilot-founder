@@ -55,6 +55,7 @@ export default function KanbanBoardPage() {
   const [newLeadPhone, setNewLeadPhone] = useState("");
   const [newLeadReason, setNewLeadReason] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
+  const [createNotice, setCreateNotice] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [telecallerFilter, setTelecallerFilter] = useState("all");
   const [moveError, setMoveError] = useState<string | null>(null);
@@ -133,6 +134,7 @@ export default function KanbanBoardPage() {
     setNewLeadPhone("");
     setNewLeadReason("");
     setCreateError(null);
+    setCreateNotice(null);
     setAddingLead(true);
   }
 
@@ -144,13 +146,25 @@ export default function KanbanBoardPage() {
     }
     setCreating(true);
     setCreateError(null);
+    setCreateNotice(null);
     try {
-      await leadsApi.createLead({
+      const res = await leadsApi.createLead({
         name,
         phone: newLeadPhone.trim() || undefined,
         reason: newLeadReason.trim() || undefined,
       });
       setAddingLead(false);
+      // POST /api/leads is idempotent on contact_key (phone, else name slug):
+      // a match MERGES the phone/reason onto the existing row and KEEPS its old
+      // name, returning created: false. Reporting that as a plain success let
+      // the founder believe they'd added a new lead when they had quietly
+      // edited a different one — under a name they never typed.
+      setCreateNotice(
+        res.created
+          ? `Added "${res.name}".`
+          : `"${name}" already exists as "${res.name}" — no new lead was created. ` +
+            `The phone and enquiry you entered were merged into that lead instead.`
+      );
       load();
     } catch (e) {
       setCreateError(e instanceof ApiError ? e.message : "Failed to create lead");
@@ -206,9 +220,16 @@ export default function KanbanBoardPage() {
     [visibleLeads]
   );
 
-  const staleCount = leads.filter((l) => l.days_stuck >= 5).length;
-  const overdueCount = leads.filter((l) => l.days_stuck >= 2).length;
-  const avgDaysStuck = leads.length ? (leads.reduce((sum, l) => sum + l.days_stuck, 0) / leads.length).toFixed(1) : "0";
+  // Derived from visibleLeads, NOT leads — the board, the stuck table and the
+  // export all honour the telecaller filter, so stats computed off the raw list
+  // reported whole-org numbers above a board showing one person's four cards.
+  const staleCount = visibleLeads.filter((l) => l.days_stuck >= 5).length;
+  const overdueCount = visibleLeads.filter((l) => l.days_stuck >= 2).length;
+  const avgDaysStuck = visibleLeads.length
+    ? (visibleLeads.reduce((sum, l) => sum + l.days_stuck, 0) / visibleLeads.length).toFixed(1)
+    : "0";
+  const filtering = telecallerFilter !== "all";
+  const filterLabel = telecallerFilter === "__unassigned__" ? "Unassigned" : telecallerFilter;
 
   return (
     <div className="pb-10">
@@ -250,15 +271,37 @@ export default function KanbanBoardPage() {
           </>
         ) : (
           <>
-            <StatCard label="Stale Leads (5+ days)" value={String(staleCount)} tone={staleCount > 0 ? "danger" : "default"} icon={Clock} />
-            <StatCard label="Overdue (48h+)" value={String(overdueCount)} tone={overdueCount > 0 ? "danger" : "default"} icon={AlertTriangle} />
-            <StatCard label="Avg Days Stuck" value={`${avgDaysStuck}d`} icon={Clock} />
+            {/* `note` names the scope so a filtered board's numbers can't be
+                mistaken for org-wide ones. */}
+            <StatCard
+              label="Stale Leads (5+ days)"
+              value={error ? "—" : String(staleCount)}
+              tone={!error && staleCount > 0 ? "danger" : "default"}
+              note={filtering ? `${filterLabel} only` : undefined}
+              icon={Clock}
+            />
+            <StatCard
+              label="Overdue (48h+)"
+              value={error ? "—" : String(overdueCount)}
+              tone={!error && overdueCount > 0 ? "danger" : "default"}
+              note={filtering ? `${filterLabel} only` : undefined}
+              icon={AlertTriangle}
+            />
+            <StatCard
+              label="Avg Days Stuck"
+              value={error ? "—" : `${avgDaysStuck}d`}
+              note={filtering ? `${filterLabel} only` : undefined}
+              icon={Clock}
+            />
           </>
         )}
       </div>
 
       {error && (
-        <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div
+          role="alert"
+          className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
           {error} —{" "}
           <button className="font-semibold underline" onClick={load}>
             Retry
@@ -267,9 +310,24 @@ export default function KanbanBoardPage() {
       )}
 
       {moveError && (
-        <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div
+          role="alert"
+          className="mt-4 mx-4 sm:mx-6 lg:mx-8 flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+        >
           <span>{moveError}</span>
-          <button className="shrink-0 font-semibold underline" onClick={() => setMoveError(null)}>
+          <button className="shrink-0 font-semibold underline" onClick={() => setMoveError(null)} aria-label="Dismiss move error">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {createNotice && (
+        <div
+          role="status"
+          className="mt-4 mx-4 sm:mx-6 lg:mx-8 flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"
+        >
+          <span>{createNotice}</span>
+          <button className="shrink-0 font-semibold underline" onClick={() => setCreateNotice(null)} aria-label="Dismiss notice">
             Dismiss
           </button>
         </div>
@@ -284,8 +342,18 @@ export default function KanbanBoardPage() {
           </div>
         </div>
       ) : leads.length === 0 && !error ? (
-        <p className="mt-6 px-4 text-center text-sm text-slate-400 sm:px-6 lg:px-8">
+        <p className="mt-6 px-4 text-center text-sm text-slate-600 sm:px-6 lg:px-8">
           No leads yet. Add one above, or leads created via the mobile app will show up here.
+        </p>
+      ) : visibleLeads.length === 0 && !error ? (
+        // The org HAS leads — this telecaller just doesn't own any. Saying
+        // "No leads yet" here would be flatly wrong, so name the filter and
+        // offer the way out.
+        <p className="mt-6 px-4 text-center text-sm text-slate-600 sm:px-6 lg:px-8">
+          No leads assigned to {filterLabel}.{" "}
+          <button className="font-semibold text-primary-600 underline" onClick={() => setTelecallerFilter("all")}>
+            Clear filter
+          </button>
         </p>
       ) : (
         <>
@@ -315,7 +383,7 @@ export default function KanbanBoardPage() {
                               {lead.score !== null ? `Score ${lead.score}` : "Not scored"}
                             </span>
                           </div>
-                          <div className="mt-1.5 text-xs text-slate-400">
+                          <div className="mt-1.5 text-xs text-slate-600">
                             {lead.telecaller_name ?? "Unassigned"} · {freshLabel(lead.days_stuck)}
                           </div>
                           <select
@@ -361,7 +429,7 @@ export default function KanbanBoardPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[640px] text-sm">
                     <thead>
-                      <tr className="border-b border-slate-100 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      <tr className="border-b border-slate-100 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                         <th className="px-5 py-3">Lead</th>
                         <th className="px-3 py-3">Source</th>
                         <th className="px-3 py-3">Stage</th>

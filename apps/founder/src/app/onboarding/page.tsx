@@ -152,23 +152,44 @@ export default function OnboardingPage() {
   return (
     <div className="flex min-h-screen w-full">
       <div className="relative hidden w-[32%] flex-col justify-between overflow-hidden bg-navy-950 px-10 py-10 lg:flex">
-        <div className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary-600 text-sm font-bold text-white">
-            LP
-          </span>
+        {/* Ambient warmth — matches the login/register hero panel. */}
+        <div className="pointer-events-none absolute -left-24 -top-24 size-72 rounded-full bg-amber-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 -right-16 size-80 rounded-full bg-amber-600/[0.06] blur-3xl" />
+
+        <div className="relative flex items-center gap-2.5">
+          <img src="/asan-mark.png" alt="" className="h-8 w-auto shrink-0" />
           <span className="text-base font-bold text-white">LeadPilot</span>
         </div>
 
-        <div>
-          <h1 className="text-2xl font-bold leading-tight text-white">{meta.headline}</h1>
+        <div className="relative">
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-white">{meta.headline}</h1>
           <p className="mt-3 max-w-sm text-sm text-slate-400">{meta.description}</p>
 
-          <div className="relative mt-8 h-56 overflow-hidden rounded-2xl bg-gradient-to-br from-primary-900/40 via-navy-900 to-navy-900 p-6">
-            <div className="absolute -right-4 top-6 size-20 rotate-12 rounded-2xl border border-white/10" />
-            <div className="absolute left-6 top-10 size-24 rotate-45 rounded-2xl border border-white/10 bg-primary-500/10" />
-            <div className="absolute left-16 bottom-8 size-2.5 rounded-full bg-navy-800" />
+          {/* Same signal-lock motif as the login/register hero — the corner
+              brackets echo the LeadPilot mark instead of an unrelated shape. */}
+          <div className="relative mt-8 flex h-56 items-center justify-center overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-navy-900 via-navy-950 to-navy-950">
+            <div
+              className="absolute inset-0 opacity-[0.07]"
+              style={{
+                backgroundImage:
+                  "linear-gradient(rgba(245,158,11,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(245,158,11,0.5) 1px, transparent 1px)",
+                backgroundSize: "28px 28px",
+              }}
+            />
 
-            <div className="absolute bottom-6 left-6 flex flex-col gap-2">
+            <div className="absolute size-32 rounded-full bg-amber-500/10 blur-2xl" />
+            <div className="absolute size-32 rounded-full border border-amber-400/25 [animation:ping_2.8s_cubic-bezier(0,0,0.2,1)_infinite]" />
+            <div className="absolute size-24 rounded-full border border-amber-400/20" />
+
+            <svg viewBox="0 0 160 160" className="relative size-24 text-amber-400" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+              <path d="M8 42 V12 H38" />
+              <path d="M122 12 H152 V42" />
+              <path d="M152 118 V148 H122" />
+              <path d="M38 148 H8 V118" />
+            </svg>
+            <span className="absolute size-2.5 rounded-full bg-amber-400 shadow-[0_0_18px_4px_rgba(245,158,11,0.55)]" />
+
+            <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2">
               {meta.badges.map((b, i) => (
                 <span
                   key={b}
@@ -182,8 +203,8 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        <div>
-          <p className="text-sm font-semibold text-primary-400">✦ Trusted by 500+ businesses</p>
+        <div className="relative">
+          <p className="text-sm font-semibold text-amber-400">✦ Trusted by 500+ businesses</p>
           <p className="mt-1 text-xs text-slate-500">Set up takes less than 5 minutes</p>
         </div>
       </div>
@@ -226,7 +247,7 @@ export default function OnboardingPage() {
                     placeholder="https://..."
                     className="input"
                   />
-                  <p className="mt-1.5 text-xs text-primary-600">● AI will scan this to learn about your business</p>
+                  <p className="mt-1.5 text-xs text-amber-700">● AI will scan this to learn about your business</p>
                 </Field>
                 <Field label="Primary Languages">
                   <div className="flex flex-wrap gap-2">
@@ -238,7 +259,7 @@ export default function OnboardingPage() {
                         className={cn(
                           "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
                           languages.includes(lang)
-                            ? "border-primary-500 bg-primary-50 text-primary-700"
+                            ? "border-amber-600 bg-amber-50 text-amber-700"
                             : "border-slate-200 text-slate-600 hover:bg-slate-50"
                         )}
                       >
@@ -310,15 +331,15 @@ export default function OnboardingPage() {
                         onClick={() => setBrandVoice(v.key)}
                         className={cn(
                           "relative rounded-xl border p-4 text-left transition-colors",
-                          brandVoice === v.key ? "border-primary-500 bg-primary-50" : "border-slate-200 hover:bg-slate-50"
+                          brandVoice === v.key ? "border-amber-600 bg-amber-50" : "border-slate-200 hover:bg-slate-50"
                         )}
                       >
                         <span className="text-sm font-semibold text-slate-900">{v.key}</span>
-                        <p className={cn("text-xs", brandVoice === v.key ? "text-primary-600" : "text-slate-500")}>
+                        <p className={cn("text-xs", brandVoice === v.key ? "text-amber-700" : "text-slate-500")}>
                           {v.desc}
                         </p>
                         {brandVoice === v.key && (
-                          <span className="absolute right-3 top-3 flex size-5 items-center justify-center rounded-full bg-primary-600 text-white">
+                          <span className="absolute right-3 top-3 flex size-5 items-center justify-center rounded-full bg-amber-700 text-white">
                             <Check className="size-3" />
                           </span>
                         )}
@@ -346,7 +367,7 @@ export default function OnboardingPage() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={logoDataUrl} alt="Company logo preview" className="h-16 w-auto object-contain" />
                     ) : (
-                      <Upload className="size-6 text-primary-500" />
+                      <Upload className="size-6 text-amber-600" />
                     )}
                     <p className="text-sm font-medium text-slate-700">
                       {logoDataUrl ? "Click to replace" : "Click to upload or drag & drop"}
@@ -361,8 +382,8 @@ export default function OnboardingPage() {
 
           {step === 4 && (
             <div className="text-center">
-              <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-primary-100">
-                <Check className="size-7 text-primary-600" />
+              <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-amber-100">
+                <Check className="size-7 text-amber-700" />
               </div>
               <h2 className="mt-4 text-2xl font-bold text-slate-900">Ready to launch</h2>
               <p className="mt-1.5 text-sm text-slate-500">We&apos;ll use these details to train your LeadPilot AI agents.</p>
@@ -379,7 +400,7 @@ export default function OnboardingPage() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Services</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {services.map((s) => (
-                      <span key={s} className="rounded-md bg-primary-50 px-3 py-1 text-sm font-medium text-primary-700">
+                      <span key={s} className="rounded-md bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700">
                         {s}
                       </span>
                     ))}
@@ -391,7 +412,11 @@ export default function OnboardingPage() {
                 <p className="mt-4 text-sm font-medium text-red-600">{launchError}</p>
               )}
 
-              <Button className="mt-6 w-full" onClick={handleLaunch} disabled={launching}>
+              <Button
+                className="mt-6 w-full bg-amber-500 text-navy-950 hover:bg-amber-400 focus-visible:outline-amber-500"
+                onClick={handleLaunch}
+                disabled={launching}
+              >
                 {launching ? "Launching…" : "Create Organisation"}
               </Button>
             </div>
@@ -412,6 +437,7 @@ export default function OnboardingPage() {
               {/* Step 1 needs the org's real name + industry before proceeding —
                   nothing is pre-filled now, so this stops a blank launch. */}
               <Button
+                className="bg-amber-500 text-navy-950 hover:bg-amber-400 focus-visible:outline-amber-500"
                 onClick={() => setStep((s) => s + 1)}
                 disabled={step === 1 && (!orgName.trim() || !industry)}
               >
@@ -454,7 +480,7 @@ function SummaryItem({ label, value, link }: { label: string; value: string; lin
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-      <p className={cn("text-sm font-semibold", link ? "text-primary-600" : "text-slate-900")}>{value}</p>
+      <p className={cn("text-sm font-semibold", link ? "text-amber-700" : "text-slate-900")}>{value}</p>
     </div>
   );
 }

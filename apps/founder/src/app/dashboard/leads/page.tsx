@@ -96,6 +96,15 @@ export default function AllLeadsPage() {
     return out;
   }, [leads, stage, owner, source, query]);
 
+  const filtering = !!query.trim() || stage !== ALL || owner !== ALL_OWNERS || source !== ALL_SOURCES;
+
+  function clearFilters() {
+    setQuery("");
+    setStage(ALL);
+    setOwner(ALL_OWNERS);
+    setSource(ALL_SOURCES);
+  }
+
   function exportCsv() {
     const header = ["Name", "Phone", "Source", "Stage", "Score", "Value", "Owner", "Last Update"];
     const escape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
@@ -147,6 +156,7 @@ export default function AllLeadsPage() {
           <select
             value={owner}
             onChange={(e) => setOwner(e.target.value)}
+            aria-label="Filter by owner"
             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600"
           >
             <option>{ALL_OWNERS}</option>
@@ -157,6 +167,7 @@ export default function AllLeadsPage() {
           <select
             value={source}
             onChange={(e) => setSource(e.target.value)}
+            aria-label="Filter by source"
             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600"
           >
             <option>{ALL_SOURCES}</option>
@@ -174,6 +185,7 @@ export default function AllLeadsPage() {
               <button
                 key={s}
                 onClick={() => setStage(s)}
+                aria-pressed={active}
                 className={cn(
                   "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
                   active ? "bg-primary-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
@@ -195,7 +207,10 @@ export default function AllLeadsPage() {
       </div>
 
       {error && (
-        <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div
+          role="alert"
+          className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
           {error} —{" "}
           <button className="font-semibold underline" onClick={load}>
             Retry
@@ -208,7 +223,7 @@ export default function AllLeadsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <th className="px-5 py-2.5">Lead</th>
                   <th className="px-3 py-2.5">Enquiry</th>
                   <th className="px-3 py-2.5">Source</th>
@@ -228,12 +243,33 @@ export default function AllLeadsPage() {
                     <SkeletonTableRow columns={8} />
                     <SkeletonTableRow columns={8} />
                   </>
+                ) : error ? (
+                  // The red strip above already explains what happened. Without
+                  // this branch the table also printed "No leads yet." directly
+                  // under it — the app asserting the org has no leads at the one
+                  // moment it demonstrably cannot know. (Kanban already guards
+                  // its empty state the same way.)
+                  <tr>
+                    <td colSpan={8} className="px-5 py-10 text-center text-sm text-slate-600">
+                      Leads couldn&apos;t be loaded.
+                    </td>
+                  </tr>
                 ) : visible.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-5 py-10 text-center text-sm text-slate-400">
-                      {query || stage !== ALL || owner !== ALL_OWNERS || source !== ALL_SOURCES
-                        ? "No leads match these filters."
-                        : "No leads yet."}
+                    <td colSpan={8} className="px-5 py-10 text-center text-sm text-slate-600">
+                      {/* "No data" and "your filters matched nothing" are
+                          different problems with different fixes, so only the
+                          second one gets a Clear filters escape hatch. */}
+                      {filtering ? (
+                        <>
+                          No leads match these filters.{" "}
+                          <button className="font-semibold text-primary-600 underline" onClick={clearFilters}>
+                            Clear filters
+                          </button>
+                        </>
+                      ) : (
+                        "No leads yet."
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -247,7 +283,7 @@ export default function AllLeadsPage() {
                         <Link href={`/dashboard/leads/detail?id=${l.id}`} className="block font-medium text-slate-900 hover:text-primary-600">
                           {l.name}
                         </Link>
-                        {l.phone && <span className="block text-xs text-slate-400">{l.phone}</span>}
+                        {l.phone && <span className="block text-xs text-slate-600">{l.phone}</span>}
                         <CopyableId id={l.id} className="mt-0.5" />
                       </td>
                       <td className="max-w-[220px] truncate px-3 py-3 text-slate-500">{l.reason || "—"}</td>
@@ -260,15 +296,17 @@ export default function AllLeadsPage() {
                       <td className="px-3 py-3 font-mono text-slate-700">{l.score ?? "—"}</td>
                       <td className="px-3 py-3 font-mono text-slate-700">{l.deal_value != null ? formatINR(l.deal_value) : "—"}</td>
                       <td className="px-3 py-3 text-slate-500">{l.telecaller_name || "—"}</td>
-                      <td className="px-5 py-3 font-mono text-xs text-slate-400">{freshLabel(l.days_stuck)}</td>
+                      <td className="px-5 py-3 font-mono text-xs text-slate-600">{freshLabel(l.days_stuck)}</td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
-          {!loading && (
-            <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-400">
+          {/* "Showing 0 of 0 leads" is a claim about the org's data, so it's
+              suppressed on a failed fetch alongside the empty state. */}
+          {!loading && !error && (
+            <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-600">
               Showing {visible.length} of {leads?.length ?? 0} leads
             </div>
           )}

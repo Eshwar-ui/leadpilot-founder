@@ -13,7 +13,10 @@ import { cn, VERDICT_TONE } from "@/lib/utils";
 
 const PAGE_SIZE = 25;
 
-function fmtDateTime(iso: string) {
+// NULLABLE: a call row keeps its timestamp only once the recording has been
+// ingested — an in-flight upload has none yet, so never hand this to `new Date()`.
+function fmtDateTime(iso: string | null) {
+  if (!iso) return "—";
   return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
@@ -39,7 +42,16 @@ function CallLogContent() {
   }, []);
 
   function load() {
-    if (!id || !dateRange) return;
+    // `loading` starts true, so every early return here has to decide whether
+    // the skeleton is still telling the truth. A null dateRange lasts a single
+    // render (the effect above fills it in on mount) — that one IS still
+    // loading. A missing ?id= never resolves, and used to leave this page in a
+    // permanent skeleton with no error at all.
+    if (!dateRange) return;
+    if (!id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     telecallersApi
@@ -55,13 +67,39 @@ function CallLogContent() {
   useEffect(load, [id, dateRange]);
 
   function loadMore() {
-    if (!dateRange) return;
+    if (!dateRange || !id) return;
     setLoadingMore(true);
     telecallersApi
       .callLog(id, { start: dateRange.start, end: dateRange.end, skip: calls.length, limit: PAGE_SIZE })
       .then((res) => setCalls((prev) => [...prev, ...res.calls]))
-      .catch(() => {})
+      .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load more calls"))
       .finally(() => setLoadingMore(false));
+  }
+
+  if (!id) {
+    return (
+      <div className="pb-10">
+        <div className="px-4 pt-6 sm:px-6 lg:px-8">
+          <Link
+            href="/dashboard/telecallers/performance"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-primary-600"
+          >
+            <ArrowLeft className="size-3.5" /> Performance Matrix
+          </Link>
+        </div>
+        <div className="mt-4 px-4 sm:px-6 lg:px-8">
+          <Card className="p-6">
+            <h1 className="text-base font-semibold text-slate-900">No telecaller specified</h1>
+            <p className="mt-1 text-sm text-slate-600">
+              This call log needs a telecaller to open. Pick one from the performance matrix.
+            </p>
+            <Link href="/dashboard/telecallers/performance" className="mt-4 inline-block">
+              <Button size="sm">Go to Performance Matrix</Button>
+            </Link>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -80,13 +118,13 @@ function CallLogContent() {
           <div className="flex flex-wrap items-center justify-between gap-3 p-5 pb-0">
             <div>
               <h3 className="text-sm font-semibold text-slate-900">Call Log{name ? ` — ${name}` : ""}</h3>
-              <p className="mt-0.5 text-xs text-slate-400">{total} call{total === 1 ? "" : "s"} in range</p>
+              <p className="mt-0.5 text-xs text-slate-600">{total} call{total === 1 ? "" : "s"} in range</p>
             </div>
             {dateRange && <DateRangePicker value={dateRange} onChange={setDateRange} />}
           </div>
 
           {error && (
-            <div className="mx-5 mt-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div role="alert" className="mx-5 mt-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error} —{" "}
               <button className="font-semibold underline" onClick={load}>
                 Retry
@@ -101,7 +139,7 @@ function CallLogContent() {
               <Skeleton block className="mt-2 h-10 w-full" />
             </div>
           ) : calls.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-slate-400">No calls in this range.</p>
+            <p className="px-5 py-6 text-sm text-slate-600">No calls in this range.</p>
           ) : (
             <>
               <div className="mt-3 divide-y divide-slate-100">
@@ -111,12 +149,12 @@ function CallLogContent() {
                     href={`/dashboard/calls/detail?id=${c.call_id}`}
                     className="flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-slate-50"
                   >
-                    <span className="font-mono text-xs text-slate-400">{fmtDateTime(c.timestamp)}</span>
+                    <span className="font-mono text-xs text-slate-600">{fmtDateTime(c.timestamp)}</span>
                     <span className="flex items-center gap-2">
                       {c.total_score != null && (
-                        <span className="font-mono text-xs font-semibold text-slate-500">{c.total_score}</span>
+                        <span className="font-mono text-xs font-semibold text-slate-600">{c.total_score}</span>
                       )}
-                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", VERDICT_TONE[c.lead_verdict ?? ""] ?? "bg-slate-100 text-slate-500")}>
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", VERDICT_TONE[c.lead_verdict ?? ""] ?? "bg-slate-100 text-slate-600")}>
                         {c.lead_verdict ?? "Unscored"}
                       </span>
                     </span>

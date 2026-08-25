@@ -57,11 +57,15 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `error` (which is about the LIST fetch) so a failed
+  // mark-as-read doesn't imply the stream below is stale or wrong.
+  const [actionError, setActionError] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
 
   function load() {
     setLoading(true);
     setError(null);
+    setActionError(null);
     notificationsApi
       .list({ limit: 100 })
       .then((res) => setNotifications(res.notifications))
@@ -85,21 +89,38 @@ export default function NotificationsPage() {
 
   async function markRead(notification: FounderNotification) {
     if (notification.read_at) return;
+    setActionError(null);
     try {
       await notificationsApi.markRead(notification.id);
       setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read_at: new Date().toISOString() } : item));
-    } catch {
-      // Keep the item visible; the next refresh will retry the read state.
+    } catch (e) {
+      // The old empty catch justified itself with "the next refresh will retry"
+      // — but this page never polls, so the only refresh is the button in the
+      // header. Nothing retried, and the failure was completely invisible: the
+      // unread dot just stayed put with no explanation. Say so, and point at
+      // the one thing that actually re-syncs the state.
+      setActionError(
+        `Couldn't mark "${notification.title}" as read${e instanceof ApiError ? ` — ${e.message}` : "."} Use Refresh to re-check.`
+      );
     }
   }
 
   async function markAllRead() {
     if (!unreadCount) return;
     setMarkingAll(true);
+    setActionError(null);
     try {
       await notificationsApi.markAllRead();
       const now = new Date().toISOString();
       setNotifications((current) => current.map((item) => item.read_at ? item : { ...item, read_at: now }));
+    } catch (e) {
+      // There was no catch here at all: a failing POST became an unhandled
+      // rejection, the button simply stopped spinning, and nothing on screen
+      // changed — which is indistinguishable from "there was nothing to do".
+      // The founder walked away believing the queue was cleared.
+      setActionError(
+        e instanceof ApiError ? `Couldn't mark everything as read — ${e.message}` : "Couldn't mark everything as read. Try again."
+      );
     } finally {
       setMarkingAll(false);
     }
@@ -139,8 +160,20 @@ export default function NotificationsPage() {
       />
 
       {error && (
-        <div className="mx-4 mt-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 sm:mx-6 lg:mx-8">
+        <div role="alert" className="mx-4 mt-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 sm:mx-6 lg:mx-8">
           {error} — <button className="font-semibold underline" onClick={load}>Retry</button>
+        </div>
+      )}
+
+      {actionError && (
+        <div
+          role="alert"
+          className="mx-4 mt-4 flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:mx-6 lg:mx-8"
+        >
+          <span>{actionError}</span>
+          <button className="shrink-0 font-semibold underline" onClick={() => setActionError(null)} aria-label="Dismiss">
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -149,13 +182,25 @@ export default function NotificationsPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
             <div>
               <p className="text-sm font-semibold text-slate-900">Activity stream</p>
-              <p className="mt-0.5 text-xs text-slate-400">{unreadCount ? `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}` : "You’re all caught up"}</p>
+              {/* "You're all caught up" is only true once we've actually read
+                  the stream — during load and after a failure the count is 0
+                  for reasons that have nothing to do with being caught up. */}
+              <p className="mt-0.5 text-xs text-slate-600">
+                {loading
+                  ? "Loading your stream…"
+                  : error
+                    ? "Unread count unavailable"
+                    : unreadCount
+                      ? `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}`
+                      : "You’re all caught up"}
+              </p>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {FILTERS.map((item) => (
                 <button
                   key={item.key}
                   onClick={() => setFilter(item.key)}
+                  aria-pressed={filter === item.key}
                   className={cn(
                     "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
                     filter === item.key ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-500 hover:bg-slate-50",
@@ -171,11 +216,37 @@ export default function NotificationsPage() {
             <div className="space-y-3 p-5">
               {[1, 2, 3].map((item) => <div key={item} className="h-20 animate-pulse rounded-xl bg-slate-100" />)}
             </div>
+          ) : error ? (
+            // The red strip above already said the fetch failed. Rendering the
+            // "nothing here yet" state underneath it told the founder their org
+            // has no notifications — a claim we can't make on a failed load.
+            <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
+              <p className="text-sm text-slate-600">Notifications couldn&apos;t be loaded.</p>
+            </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
               <span className="flex size-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><Bell className="size-6" /></span>
-              <p className="mt-4 text-sm font-semibold text-slate-700">No notifications here</p>
-              <p className="mt-1 max-w-sm text-sm text-slate-400">Lead stage moves, attendance, follow-ups, and telecaller activity will appear in this stream as they happen.</p>
+              {/* An empty *tab* is not an empty *stream*. "Unread" with nothing
+                  in it is good news; "no notifications at all" is a different
+                  statement, and only the tab case has an action to offer. */}
+              {notifications.length === 0 ? (
+                <>
+                  <p className="mt-4 text-sm font-semibold text-slate-700">No notifications here</p>
+                  <p className="mt-1 max-w-sm text-sm text-slate-600">Lead stage moves, attendance, follow-ups, and telecaller activity will appear in this stream as they happen.</p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-4 text-sm font-semibold text-slate-700">
+                    {filter === "unread" ? "Nothing unread" : "Nothing in this tab"}
+                  </p>
+                  <p className="mt-1 max-w-sm text-sm text-slate-600">
+                    {notifications.length} notification{notifications.length === 1 ? "" : "s"} in the stream — none match this filter.
+                  </p>
+                  <button className="mt-3 text-sm font-semibold text-primary-600 underline" onClick={() => setFilter("all")}>
+                    Clear filters
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
@@ -195,11 +266,11 @@ export default function NotificationsPage() {
                     <span className={cn("mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl", meta.iconTone)}><Icon className="size-4" /></span>
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{meta.label}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600">{meta.label}</span>
                         <span className="text-[10px] text-slate-300">·</span>
-                        <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{notification.actor_name ?? "System"}</span>
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-slate-600">{notification.actor_name ?? "System"}</span>
                         <span className="text-[10px] text-slate-300">·</span>
-                        <span className="text-[10px] font-medium text-slate-400">{timeAgo(notification.created_at)}</span>
+                        <span className="text-[10px] font-medium text-slate-600">{timeAgo(notification.created_at)}</span>
                       </span>
                       <span className={cn("mt-1 block text-sm leading-snug", notification.read_at ? "font-medium text-slate-700" : "font-bold text-slate-900")}>
                         {notification.title}

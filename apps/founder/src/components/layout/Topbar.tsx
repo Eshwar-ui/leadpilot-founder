@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, AlertTriangle, BarChart3, Bell, CheckCircle2, ChevronRight, Inbox, Info, LogOut, Menu, Search, Users2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, Bell, CheckCircle2, ChevronRight, Inbox, Info, LogOut, Menu, Search, Users2 } from "lucide-react";
 import { clearSession, getStoredUser } from "@/lib/auth";
 import { markReachable } from "@/lib/connectivity";
 import {
@@ -26,8 +26,8 @@ const severityMeta: Record<NotificationSeverity, { icon: typeof Info; ring: stri
 
 export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  // Live date, set client-side to avoid a hydration mismatch (was a hardcoded
-  // "Tue, 23 Jun 2026" from mock-data.ts).
+  // Live date, set client-side to avoid a hydration mismatch (was previously a
+  // hardcoded "Tue, 23 Jun 2026").
   const [today, setToday] = useState("");
   const [notifications, setNotifications] = useState<FounderNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -178,6 +178,10 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   }
 
   const orgName = user?.org_name ?? "";
+  // Fall back to a neutral dash, never to initials of a person. This used to
+  // read "RS" — a leftover mock persona that rendered as the signed-in
+  // founder's own avatar for the moment before the stored user loaded, and
+  // permanently for any session where it failed to.
   const initials = user
     ? user.name
         .split(" ")
@@ -185,7 +189,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
         .slice(0, 2)
         .join("")
         .toUpperCase()
-    : "RS";
+    : "—";
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 sm:px-5">
@@ -197,9 +201,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
         >
           <Menu className="size-5" />
         </button>
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white">
-          <BarChart3 className="size-4" />
-        </span>
+        <img src="/asan-mark.png" alt="" className="h-7 w-auto shrink-0" />
         <span className="truncate text-sm font-bold text-slate-900">LeadPilot</span>
         <span className="hidden shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 sm:inline">
           Founder
@@ -366,9 +368,15 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
             </div>
           )}
         </div>
+        {/* Was titled "Your profile" but pointed at /dashboard/settings/org —
+            the ORGANISATION page, the exact same destination as the org chip
+            to its left. There is no personal-profile route, so this now points
+            at Settings, where the founder's own account actions (change
+            password) actually live, and the tooltip names who is signed in. */}
         <Link
-          href="/dashboard/settings/org"
-          title="Your profile"
+          href="/dashboard/settings"
+          title={user ? `Signed in as ${user.name} (${user.email}) — account settings` : "Account settings"}
+          aria-label="Account settings"
           className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs font-semibold text-white transition-opacity hover:opacity-90"
         >
           {initials}

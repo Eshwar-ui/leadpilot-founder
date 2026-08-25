@@ -1,14 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
 import { Users, Bell, Building2, KeyRound } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { ApiError, authApi } from "@/lib/api";
-import { updateStoredUser } from "@/lib/auth";
+import {
+  changePassword,
+  updateStoredUser,
+  validateNewPassword,
+  type PasswordFieldErrors,
+} from "@/lib/auth";
 
 const CARDS = [
   {
@@ -36,35 +40,57 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwFieldErrors, setPwFieldErrors] = useState<PasswordFieldErrors>({});
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwSubmitting, setPwSubmitting] = useState(false);
   const [pwSuccess, setPwSuccess] = useState(false);
+
+  // The dialog's inputs live in Modal's `children` while its submit button
+  // lives in `footer`, i.e. outside the <form>. `form={pwFormId}` on that
+  // button associates the two, which is what makes Enter-to-submit work from
+  // inside any of the password fields.
+  const pwFormId = useId();
+  const currentId = useId();
+  const newId = useId();
+  const confirmId = useId();
 
   function openChangePassword() {
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
+    setPwFieldErrors({});
     setPwError(null);
     setPwSuccess(false);
     setPwOpen(true);
   }
 
-  async function submitChangePassword() {
-    if (newPassword !== confirmPassword) {
-      setPwError("New password and confirmation don't match");
+  async function submitChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError(null);
+
+    const errors = validateNewPassword(currentPassword, newPassword, confirmPassword);
+    setPwFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setPwSubmitting(true);
+    // Same reason as the forced-reset screen: api.ts's authedRequest turns the
+    // backend's "current password is incorrect" 401 into a session wipe and a
+    // redirect to /login. changePassword() in lib/auth carries the token
+    // itself so a typo stays a field error. See its comment for the details.
+    const outcome = await changePassword({
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+    setPwSubmitting(false);
+
+    if (!outcome.ok) {
+      if (outcome.wrongCurrentPassword) setPwFieldErrors({ current: outcome.message });
+      else setPwError(outcome.message);
       return;
     }
-    setPwSubmitting(true);
-    setPwError(null);
-    try {
-      const user = await authApi.changePassword({ current_password: currentPassword, new_password: newPassword });
-      updateStoredUser({ must_reset_password: user.must_reset_password });
-      setPwSuccess(true);
-    } catch (e) {
-      setPwError(e instanceof ApiError ? e.message : "Failed to change password");
-    } finally {
-      setPwSubmitting(false);
-    }
+
+    updateStoredUser({ must_reset_password: outcome.user.must_reset_password });
+    setPwSuccess(true);
   }
 
   return (
@@ -115,8 +141,9 @@ export default function SettingsPage() {
               </Button>
               <Button
                 size="sm"
+                type="submit"
+                form={pwFormId}
                 className="flex-1"
-                onClick={submitChangePassword}
                 disabled={pwSubmitting || !currentPassword || !newPassword || !confirmPassword}
               >
                 {pwSubmitting ? "Changing…" : "Change Password"}
@@ -128,37 +155,81 @@ export default function SettingsPage() {
         {pwSuccess ? (
           <p>Your password has been updated. Use it next time you sign in.</p>
         ) : (
-          <div className="space-y-3">
-            {pwError && <p className="text-xs font-medium text-red-600">{pwError}</p>}
+          <form id={pwFormId} className="space-y-3" onSubmit={submitChangePassword}>
+            {pwError && (
+              <p role="alert" className="text-xs font-medium text-red-600">
+                {pwError}
+              </p>
+            )}
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">Current Password</label>
+              <label htmlFor={currentId} className="mb-1 block text-xs font-semibold text-slate-600">
+                Current Password
+              </label>
               <input
+                id={currentId}
                 type="password"
+                autoComplete="current-password"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+                aria-invalid={pwFieldErrors.current ? true : undefined}
+                aria-describedby={pwFieldErrors.current ? `${currentId}-error` : undefined}
               />
+              {pwFieldErrors.current && (
+                <p id={`${currentId}-error`} role="alert" className="mt-1 text-xs font-medium text-red-600">
+                  {pwFieldErrors.current}
+                </p>
+              )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">New Password</label>
+              <label htmlFor={newId} className="mb-1 block text-xs font-semibold text-slate-600">
+                New Password
+              </label>
               <input
+                id={newId}
                 type="password"
+                // Lets the password manager offer to save the replacement
+                // instead of leaving the old one cached and wrong.
+                autoComplete="new-password"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
+                required
+                minLength={8}
                 placeholder="At least 8 characters"
+                aria-invalid={pwFieldErrors.next ? true : undefined}
+                aria-describedby={pwFieldErrors.next ? `${newId}-error` : undefined}
               />
+              {pwFieldErrors.next && (
+                <p id={`${newId}-error`} role="alert" className="mt-1 text-xs font-medium text-red-600">
+                  {pwFieldErrors.next}
+                </p>
+              )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">Confirm New Password</label>
+              <label htmlFor={confirmId} className="mb-1 block text-xs font-semibold text-slate-600">
+                Confirm New Password
+              </label>
               <input
+                id={confirmId}
                 type="password"
+                autoComplete="new-password"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={8}
+                aria-invalid={pwFieldErrors.confirm ? true : undefined}
+                aria-describedby={pwFieldErrors.confirm ? `${confirmId}-error` : undefined}
               />
+              {pwFieldErrors.confirm && (
+                <p id={`${confirmId}-error`} role="alert" className="mt-1 text-xs font-medium text-red-600">
+                  {pwFieldErrors.confirm}
+                </p>
+              )}
             </div>
-          </div>
+          </form>
         )}
       </Modal>
     </div>

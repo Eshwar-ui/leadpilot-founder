@@ -31,7 +31,11 @@ const BREAK_THRESHOLD_MIN = 15;
 // goes to a dedicated, paginated, date-filterable page for the rest.
 const CALL_LOG_PREVIEW_COUNT = 6;
 
-function fmtDateTime(iso: string) {
+// NULLABLE: a call keeps its timestamp only once the recording has been
+// ingested, so a just-uploaded call arrives here with none — `new Date(null)`
+// would silently print "01 Jan 1970" instead of admitting it isn't known yet.
+function fmtDateTime(iso: string | null) {
+  if (!iso) return "—";
   return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
@@ -87,7 +91,7 @@ function TelecallerDetailContent() {
       </div>
 
       {error && (
-        <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div role="alert" className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error} —{" "}
           <button className="font-semibold underline" onClick={load}>
             Retry
@@ -196,7 +200,7 @@ function TelecallerDetailContent() {
               <div className="flex items-center justify-between gap-3 p-5 pb-0">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900">Call Log</h3>
-                  <p className="mt-0.5 text-xs text-slate-400">Most recent calls · click to open the AI analysis</p>
+                  <p className="mt-0.5 text-xs text-slate-600">Most recent calls · click to open the AI analysis</p>
                 </div>
                 <Link
                   href={`/dashboard/telecallers/performance/detail/call-log?id=${id}&name=${encodeURIComponent(detail.name)}`}
@@ -206,7 +210,7 @@ function TelecallerDetailContent() {
                 </Link>
               </div>
               {detail.timeline.length === 0 ? (
-                <p className="px-5 py-6 text-sm text-slate-400">No calls yet.</p>
+                <p className="px-5 py-6 text-sm text-slate-600">No calls yet.</p>
               ) : (
                 <div className="mt-3 divide-y divide-slate-100">
                   {detail.timeline.slice(0, CALL_LOG_PREVIEW_COUNT).map((c) => (
@@ -215,8 +219,8 @@ function TelecallerDetailContent() {
                       href={`/dashboard/calls/detail?id=${c.call_id}`}
                       className="flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-slate-50"
                     >
-                      <span className="font-mono text-xs text-slate-400">{fmtDateTime(c.timestamp)}</span>
-                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", VERDICT_TONE[c.lead_verdict] ?? "bg-slate-100 text-slate-500")}>
+                      <span className="font-mono text-xs text-slate-600">{fmtDateTime(c.timestamp)}</span>
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", VERDICT_TONE[c.lead_verdict ?? ""] ?? "bg-slate-100 text-slate-600")}>
                         {c.lead_verdict ?? "Unscored"}
                       </span>
                     </Link>
@@ -230,13 +234,13 @@ function TelecallerDetailContent() {
             <Card className="p-5">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Best Calls</h3>
               {detail.best_calls.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-400">No scored calls yet.</p>
+                <p className="mt-3 text-sm text-slate-600">No scored calls yet.</p>
               ) : (
                 <div className="mt-3 flex flex-col gap-2">
                   {detail.best_calls.map((c) => (
                     <Link key={c.call_id} href={`/dashboard/calls/detail?id=${c.call_id}`} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm hover:bg-slate-50">
                       <span className="text-slate-600">{fmtDateTime(c.timestamp)}</span>
-                      <span className="font-mono font-bold text-emerald-600">{c.total_score}</span>
+                      <span className="font-mono font-bold text-emerald-600">{c.total_score ?? "—"}</span>
                     </Link>
                   ))}
                 </div>
@@ -245,13 +249,13 @@ function TelecallerDetailContent() {
             <Card className="p-5">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Needs Review</h3>
               {detail.needs_review.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-400">No scored calls yet.</p>
+                <p className="mt-3 text-sm text-slate-600">No scored calls yet.</p>
               ) : (
                 <div className="mt-3 flex flex-col gap-2">
                   {detail.needs_review.map((c) => (
                     <Link key={c.call_id} href={`/dashboard/calls/detail?id=${c.call_id}`} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm hover:bg-slate-50">
                       <span className="text-slate-600">{fmtDateTime(c.timestamp)}</span>
-                      <span className="font-mono font-bold text-amber-600">{c.total_score}</span>
+                      <span className="font-mono font-bold text-amber-600">{c.total_score ?? "—"}</span>
                     </Link>
                   ))}
                 </div>
@@ -265,7 +269,7 @@ function TelecallerDetailContent() {
                 Leads Assigned to {detail.name.split(" ")[0]} · {detail.leads_assigned.length}
               </h3>
               {detail.leads_assigned.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-400">No open leads assigned.</p>
+                <p className="mt-3 text-sm text-slate-600">No open leads assigned.</p>
               ) : (
                 <div className="mt-3 flex flex-col gap-1.5">
                   {detail.leads_assigned.map((l) => (
@@ -275,7 +279,7 @@ function TelecallerDetailContent() {
                       className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50"
                     >
                       <span className="font-medium text-slate-800">{l.name}</span>
-                      <span className="flex items-center gap-3 text-xs text-slate-400">
+                      <span className="flex items-center gap-3 text-xs text-slate-600">
                         {l.pipeline_stage}
                         {l.deal_value != null ? <span className="font-mono text-slate-600">{formatINR(l.deal_value)}</span> : null}
                       </span>
@@ -287,7 +291,7 @@ function TelecallerDetailContent() {
           </div>
         </>
       ) : (
-        !error && <p className="mt-6 px-4 text-sm text-slate-400 sm:px-6 lg:px-8">Telecaller not found.</p>
+        !error && <p className="mt-6 px-4 text-sm text-slate-600 sm:px-6 lg:px-8">Telecaller not found.</p>
       )}
 
       <EditTelecallerModal

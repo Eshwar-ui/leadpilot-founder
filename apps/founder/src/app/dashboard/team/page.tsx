@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BellRing, UserPlus } from "lucide-react";
+import { BellRing, Check, Copy, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -48,6 +48,49 @@ function activityState(lastActive: string | null): { dot: string; label: string 
   return { dot: "bg-amber-500", label: "Idle" };
 }
 
+/** A one-time secret (temp password) shown with a real copy affordance.
+ * Adapted from ui/CopyableId — that one truncates to 8 chars for table rows,
+ * which would silently hand the founder half a password. Here the value must
+ * be shown and copied in full, because the API never returns it again. */
+function SecretValue({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API is unavailable on insecure origins / older browsers —
+      // the value is still visible above, so failing silently is safe. Select
+      // it so the founder can copy by hand.
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="flex items-stretch gap-2">
+      <code className="flex-1 select-all break-all rounded-lg bg-slate-100 px-3 py-2 font-mono text-sm text-slate-800">
+        {value}
+      </code>
+      <button
+        type="button"
+        onClick={copy}
+        aria-label={copied ? `${label} copied to clipboard` : `Copy ${label} to clipboard`}
+        className={cn(
+          "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors",
+          copied
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+            : "border-slate-200 text-slate-700 hover:bg-slate-50"
+        )}
+      >
+        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
 export default function ManageTeamPage() {
   const [tab, setTab] = useState("all");
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -91,6 +134,22 @@ export default function ManageTeamPage() {
   const filtered = tab === "all" ? members : members.filter((m) => m.role === tab);
   const activeCount = members.filter((m) => m.status === "Active").length;
   const inactiveCount = members.length - activeCount;
+
+  // Both modals hand back a PLAINTEXT credential. Clearing it only on the next
+  // open left the secret sitting in React state (and therefore in a devtools
+  // component inspection / a React error overlay) for the rest of the session,
+  // long after the founder closed the dialog. Wipe it on every close path —
+  // including the X, the Cancel button and the Done button.
+  function closeInvite() {
+    setInviteOpen(false);
+    setTempPassword(null);
+  }
+
+  function closeReset() {
+    setResetMember(null);
+    setResetTempPassword(null);
+    setResetCustomPassword("");
+  }
 
   function openInvite() {
     setInviteEmail("");
@@ -191,6 +250,7 @@ export default function ManageTeamPage() {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
+            aria-pressed={tab === t.key}
             className={cn(
               "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
               tab === t.key ? "bg-slate-900 text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -203,7 +263,7 @@ export default function ManageTeamPage() {
                 tab === t.key ? "bg-white/20" : "bg-slate-100 text-slate-500"
               )}
             >
-              {t.key === "all" ? members.length : members.filter((m) => m.role === t.key).length}
+              {error ? "—" : t.key === "all" ? members.length : members.filter((m) => m.role === t.key).length}
             </span>
           </button>
         ))}
@@ -218,9 +278,11 @@ export default function ManageTeamPage() {
           </>
         ) : (
           <>
-            <StatCard label="Total Members" value={String(members.length)} suffix="Managed" />
-            <StatCard label="Active" value={String(activeCount)} suffix="Enabled" />
-            <StatCard label="Inactive" value={String(inactiveCount)} suffix="Disabled" />
+            {/* On a failed fetch `members` is [], so a raw count would render a
+                confident "0 Total Members" for what is actually "unknown". */}
+            <StatCard label="Total Members" value={error ? "—" : String(members.length)} suffix="Managed" />
+            <StatCard label="Active" value={error ? "—" : String(activeCount)} suffix="Enabled" />
+            <StatCard label="Inactive" value={error ? "—" : String(inactiveCount)} suffix="Disabled" />
           </>
         )}
       </div>
@@ -228,30 +290,35 @@ export default function ManageTeamPage() {
       <div className="mt-4 px-4 sm:px-6 lg:px-8">
         <Card className="overflow-hidden">
           {error && (
-            <div className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm text-red-700">
+            <div role="alert" className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm text-red-700">
               {error} —{" "}
               <button className="font-semibold underline" onClick={loadTeam}>
                 Retry
               </button>
             </div>
           )}
-          {!loading && filtered.length === 0 ? (
-            <div className="px-5 py-10 text-center text-sm text-slate-400">
-              No team members yet. Invite your first member to get started.
+          {/* Gated on `!error`: a failed fetch also leaves `filtered` empty, and
+              rendering "No team members yet" under the red banner told the
+              founder their team was empty when the request had actually failed. */}
+          {!loading && error ? null : !loading && filtered.length === 0 ? (
+            <div className="px-5 py-10 text-center text-sm text-slate-600">
+              {members.length === 0
+                ? "No team members yet. Invite your first member to get started."
+                : `No ${ROLE_TABS.find((t) => t.key === tab)?.label.toLowerCase() ?? "members"} on the team yet.`}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-sm">
                 <thead>
-                  <tr className="border-b border-slate-100 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    <th className="px-5 py-3">Team Member</th>
-                    <th className="px-3 py-3">Role</th>
-                    <th className="px-3 py-3">Status</th>
-                    <th className="px-3 py-3 text-right">Calls</th>
-                    <th className="px-3 py-3 text-right">Leads</th>
-                    <th className="px-3 py-3">Quality</th>
-                    <th className="px-5 py-3 text-right">Last Active</th>
-                    <th className="px-5 py-3 text-right">Actions</th>
+                  <tr className="border-b border-slate-100 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    <th scope="col" className="px-5 py-3">Team Member</th>
+                    <th scope="col" className="px-3 py-3">Role</th>
+                    <th scope="col" className="px-3 py-3">Status</th>
+                    <th scope="col" className="px-3 py-3 text-right">Calls</th>
+                    <th scope="col" className="px-3 py-3 text-right">Leads</th>
+                    <th scope="col" className="px-3 py-3">Quality</th>
+                    <th scope="col" className="px-5 py-3 text-right">Last Active</th>
+                    <th scope="col" className="px-5 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -267,7 +334,7 @@ export default function ManageTeamPage() {
                     <tr key={m.id}>
                       <td className="px-5 py-3">
                         <p className="font-semibold text-slate-900">{m.name}</p>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-slate-600">
                           {m.email}
                           {m.phone && <span> · {m.phone}</span>}
                         </p>
@@ -292,7 +359,7 @@ export default function ManageTeamPage() {
                       <td className="px-3 py-3 text-right font-mono">{m.leads}</td>
                       <td className="px-3 py-3">
                         {m.quality === null ? (
-                          <span className="text-xs text-slate-400">No calls yet</span>
+                          <span className="text-xs text-slate-600">No calls yet</span>
                         ) : (
                           <div className="flex items-center gap-2">
                             <ProgressBar value={Math.round((m.quality / QUALITY_MAX) * 100)} tone="success" className="w-20" />
@@ -300,7 +367,7 @@ export default function ManageTeamPage() {
                           </div>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-right text-xs text-slate-500">{formatLastActive(m.last_active)}</td>
+                      <td className="px-5 py-3 text-right text-xs text-slate-600">{formatLastActive(m.last_active)}</td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-3">
                           {m.role === "telecaller" && m.status === "Active" && (
@@ -331,16 +398,16 @@ export default function ManageTeamPage() {
 
       <Modal
         open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
+        onClose={closeInvite}
         title={tempPassword ? "Member invited" : "Invite Member"}
         footer={
           tempPassword ? (
-            <Button size="sm" className="w-full" onClick={() => setInviteOpen(false)}>
+            <Button size="sm" className="w-full" onClick={closeInvite}>
               Done
             </Button>
           ) : (
             <>
-              <Button size="sm" variant="outline" className="flex-1" onClick={() => setInviteOpen(false)}>
+              <Button size="sm" variant="outline" className="flex-1" onClick={closeInvite}>
                 Cancel
               </Button>
               <Button size="sm" className="flex-1" onClick={submitInvite} disabled={inviteSubmitting || !inviteEmail || !inviteName}>
@@ -356,11 +423,9 @@ export default function ManageTeamPage() {
               <span className="font-semibold text-slate-900">{inviteName}</span> was added. Share this
               temporary password with them — it won&apos;t be shown again.
             </p>
-            <code className="block rounded-lg bg-slate-100 px-3 py-2 font-mono text-sm text-slate-800">
-              {tempPassword}
-            </code>
+            <SecretValue value={tempPassword} label="temporary password" />
             {inviteRole === "telecaller" && (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-600">
                 They&apos;ll use this email + password to sign in on the LeadPilot mobile app —
                 telecallers don&apos;t get a web account.
               </p>
@@ -368,7 +433,7 @@ export default function ManageTeamPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {inviteError && <p className="text-xs font-medium text-red-600">{inviteError}</p>}
+            {inviteError && <p role="alert" className="text-xs font-medium text-red-600">{inviteError}</p>}
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-500">Name</label>
               <input
@@ -399,8 +464,12 @@ export default function ManageTeamPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">Role</label>
+              <label className="mb-1 block text-xs font-semibold text-slate-500" htmlFor="invite-role">
+                Role
+              </label>
               <select
+                id="invite-role"
+                aria-label="Role for the invited member"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}
@@ -446,7 +515,7 @@ export default function ManageTeamPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {notifyError && <p className="text-xs font-medium text-red-600">{notifyError}</p>}
+            {notifyError && <p role="alert" className="text-xs font-medium text-red-600">{notifyError}</p>}
             <p className="text-xs text-slate-500">
               This sends a push only to this telecaller. They must have opened and signed in to the mobile app at least once.
             </p>
@@ -477,16 +546,16 @@ export default function ManageTeamPage() {
 
       <Modal
         open={resetMember !== null}
-        onClose={() => setResetMember(null)}
+        onClose={closeReset}
         title={resetTempPassword ? "Password reset" : "Reset Password"}
         footer={
           resetTempPassword ? (
-            <Button size="sm" className="w-full" onClick={() => setResetMember(null)}>
+            <Button size="sm" className="w-full" onClick={closeReset}>
               Done
             </Button>
           ) : (
             <>
-              <Button size="sm" variant="outline" className="flex-1" onClick={() => setResetMember(null)}>
+              <Button size="sm" variant="outline" className="flex-1" onClick={closeReset}>
                 Cancel
               </Button>
               <Button size="sm" className="flex-1" onClick={submitResetPassword} disabled={resetSubmitting}>
@@ -503,13 +572,14 @@ export default function ManageTeamPage() {
               reset. Share this {resetCustomPassword ? "" : "temporary "}password with them — it won&apos;t be
               shown again.
             </p>
-            <code className="block rounded-lg bg-slate-100 px-3 py-2 font-mono text-sm text-slate-800">
-              {resetTempPassword}
-            </code>
+            <SecretValue
+              value={resetTempPassword}
+              label={resetCustomPassword ? "password" : "temporary password"}
+            />
           </div>
         ) : (
           <div className="space-y-3">
-            {resetError && <p className="text-xs font-medium text-red-600">{resetError}</p>}
+            {resetError && <p role="alert" className="text-xs font-medium text-red-600">{resetError}</p>}
             <p>
               Reset the password for <span className="font-semibold text-slate-900">{resetMember?.name}</span>?
               Their current password will stop working immediately.

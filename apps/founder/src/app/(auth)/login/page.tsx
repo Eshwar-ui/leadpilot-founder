@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +16,9 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
+
+  const emailId = useId();
+  const passwordId = useId();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,25 +37,36 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      headline="Predict the future of your pipeline"
+      headline={
+        <>
+          Predict the future of your <span className="text-amber-400">pipeline</span>
+        </>
+      }
       description="LeadPilot uses deep learning to identify your next best customers before your competitors do."
       badges={[{ label: "Predictive Engine Online", tone: "emerald" }]}
     >
       <h2 className="text-3xl font-bold text-slate-900">Welcome back</h2>
-      <p className="mt-2 text-sm text-slate-500">Sign in to your LeadPilot account</p>
+      <p className="mt-2 text-sm text-slate-600">Sign in to your LeadPilot account</p>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+        <div
+          role="alert"
+          className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700"
+        >
           {error}
         </div>
       )}
 
       <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+          <label
+            htmlFor={emailId}
+            className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600"
+          >
             Email Address
           </label>
           <input
+            id={emailId}
             type="email"
             name="email"
             autoComplete="email"
@@ -60,16 +74,20 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder="alex@acme.inc"
-            className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+            className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-500 focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-100"
           />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+          <label
+            htmlFor={passwordId}
+            className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600"
+          >
             Password
           </label>
           <div className="relative">
             <input
+              id={passwordId}
               type={showPassword ? "text" : "password"}
               name="password"
               autoComplete="current-password"
@@ -77,26 +95,34 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="••••••••"
-              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 pr-10 text-sm placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+              className="w-full rounded-lg border border-slate-200 px-4 py-2.5 pr-12 text-sm placeholder:text-slate-500 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
             />
             <button
               type="button"
               onClick={() => setShowPassword((s) => !s)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              // size-11 = 44px, the minimum comfortable touch target. The icon
+              // stays 16px; the padding around it is what you actually hit.
+              className="absolute right-0.5 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:text-slate-700"
             >
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
         </div>
 
-        <Button type="submit" className="w-full" disabled={submitting}>
+        <Button
+          type="submit"
+          className="w-full bg-amber-500 text-navy-950 hover:bg-amber-400 focus-visible:outline-amber-500"
+          disabled={submitting}
+        >
           {submitting ? "Signing in…" : "Sign In"}
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-slate-500">
+      <p className="mt-6 text-center text-sm text-slate-600">
         Don&apos;t have an account?{" "}
-        <Link href="/register" className="font-semibold text-primary-600 hover:underline">
+        <Link href="/register" className="font-semibold text-amber-700 hover:underline">
           Create one →
         </Link>
       </p>

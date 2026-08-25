@@ -5,9 +5,11 @@ import Link from "next/link";
 import { ArrowLeft, UserPlus } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { AddTelecallerModal, ROLES, ROLE_LABEL } from "@/components/team/TeamMemberModals";
 import { ApiError, teamApi, type TeamMember } from "@/lib/api";
+import { getStoredUser } from "@/lib/auth";
 import { cn, initials } from "@/lib/utils";
 
 const statusPill: Record<string, string> = {
@@ -23,22 +25,34 @@ function lastActiveLabel(iso: string | null) {
 export default function UserManagementPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // loadError and actionError are deliberately separate. They used to share one
+  // state, and the banner that rendered it appended "— Retry" wired to load(),
+  // so every failed save read as nonsense: "Cannot deactivate your own account
+  // — Retry". Re-running load() does nothing for a rejected write.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>("All");
   const [adding, setAdding] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [deactivating, setDeactivating] = useState<TeamMember | null>(null);
 
   function load() {
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     teamApi
       .list()
       .then(setMembers)
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load team"))
+      .catch((e) => setLoadError(e instanceof ApiError ? e.message : "Failed to load team"))
       .finally(() => setLoading(false));
   }
 
   useEffect(load, []);
+
+  // localStorage is only readable after mount, so this can't be an initialiser.
+  useEffect(() => {
+    setCurrentUserId(getStoredUser()?.id ?? null);
+  }, []);
 
   const roleCounts = useMemo(() => {
     const counts: Record<string, number> = { All: members.length };
@@ -49,24 +63,44 @@ export default function UserManagementPage() {
   const visible = roleFilter === "All" ? members : members.filter((m) => m.role === roleFilter);
 
   async function changeRole(id: string, role: string) {
+    // Belt-and-braces: the <select> for your own row is already disabled below,
+    // but a self-demotion is unrecoverable from inside the product (a sole
+    // founder who becomes a Telecaller 403s on every founder endpoint,
+    // including this page), so never let one through on any code path.
+    if (id === currentUserId) return;
     setSavingId(id);
+    setActionError(null);
     try {
       const updated = await teamApi.update(id, { role });
       setMembers((prev) => prev.map((m) => (m.id === id ? updated : m)));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Failed to update role");
+      setActionError(e instanceof ApiError ? e.message : "Failed to update role");
     } finally {
       setSavingId(null);
     }
   }
 
-  async function toggleActive(m: TeamMember) {
+  // Activating is harmless and stays one-click. Deactivating is destructive
+  // (revokes access AND pushes a notification to the member's phone), so it
+  // routes through a confirmation naming the person and both consequences.
+  function onToggleActiveClick(m: TeamMember) {
+    if (m.status === "Active") {
+      setDeactivating(m);
+      return;
+    }
+    void setActive(m, true);
+  }
+
+  async function setActive(m: TeamMember, isActive: boolean) {
     setSavingId(m.id);
+    setActionError(null);
     try {
-      const updated = await teamApi.update(m.id, { is_active: m.status !== "Active" });
+      const updated = await teamApi.update(m.id, { is_active: isActive });
       setMembers((prev) => prev.map((x) => (x.id === m.id ? updated : x)));
+      setDeactivating(null);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Failed to update status");
+      setActionError(e instanceof ApiError ? e.message : "Failed to update status");
+      setDeactivating(null);
     } finally {
       setSavingId(null);
     }
@@ -92,11 +126,27 @@ export default function UserManagementPage() {
         </div>
       </div>
 
-      {error && (
+      {/* Load failures are retryable — the whole list is missing and load()
+          fixes it. */}
+      {loadError && (
         <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error} —{" "}
+          {loadError} —{" "}
           <button className="font-semibold underline" onClick={load}>
             Retry
+          </button>
+        </div>
+      )}
+
+      {/* Action failures are NOT retryable via load(); the list on screen is
+          fine and it's the write that was rejected. Dismiss instead. */}
+      {actionError && (
+        <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 flex items-start justify-between gap-3 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{actionError}</span>
+          <button
+            className="shrink-0 font-semibold underline"
+            onClick={() => setActionError(null)}
+          >
+            Dismiss
           </button>
         </div>
       )}
@@ -149,7 +199,9 @@ export default function UserManagementPage() {
                     </td>
                   </tr>
                 ) : (
-                  visible.map((m) => (
+                  visible.map((m) => {
+                    const isSelf = m.id === currentUserId;
+                    return (
                     <tr key={m.id} className="hover:bg-slate-50">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2.5">
@@ -157,17 +209,33 @@ export default function UserManagementPage() {
                             {initials(m.name)}
                           </span>
                           <div>
-                            <span className="block font-medium text-slate-900">{m.name}</span>
+                            <span className="block font-medium text-slate-900">
+                              {m.name}
+                              {isSelf && (
+                                <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                                  You
+                                </span>
+                              )}
+                            </span>
                             <span className="block text-xs text-slate-400">{m.email}</span>
                           </div>
                         </div>
                       </td>
                       <td className="px-3 py-3">
+                        {/* You cannot change your own role here. Demoting
+                            yourself is a one-way door: the new role 403s on
+                            every founder endpoint including this page, so there
+                            is no way back from inside the product. */}
                         <select
                           value={m.role}
                           onChange={(e) => changeRole(m.id, e.target.value)}
-                          disabled={savingId === m.id}
-                          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600"
+                          disabled={savingId === m.id || isSelf}
+                          title={
+                            isSelf
+                              ? "You can't change your own role — it would lock you out of the founder portal. Ask another founder or admin to do it."
+                              : undefined
+                          }
+                          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                         >
                           {ROLES.map((r) => (
                             <option key={r} value={r}>{ROLE_LABEL[r]}</option>
@@ -182,12 +250,26 @@ export default function UserManagementPage() {
                         <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", statusPill[m.status])}>{m.status}</span>
                       </td>
                       <td className="px-5 py-3 text-right">
-                        <Button variant="outline" size="sm" disabled={savingId === m.id} onClick={() => toggleActive(m)}>
+                        {/* Deactivating yourself has the same one-way-door
+                            problem as self-demotion — it revokes your own
+                            access to this page. */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={savingId === m.id || (isSelf && m.status === "Active")}
+                          title={
+                            isSelf && m.status === "Active"
+                              ? "You can't deactivate your own account — it would lock you out of the founder portal."
+                              : undefined
+                          }
+                          onClick={() => onToggleActiveClick(m)}
+                        >
                           {m.status === "Active" ? "Deactivate" : "Activate"}
                         </Button>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -196,6 +278,44 @@ export default function UserManagementPage() {
       </div>
 
       <AddTelecallerModal open={adding} onClose={() => setAdding(false)} onAdded={load} />
+
+      <Modal
+        open={deactivating !== null}
+        onClose={() => setDeactivating(null)}
+        title="Deactivate team member?"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setDeactivating(null)}
+              disabled={savingId === deactivating?.id}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              className="flex-1"
+              disabled={savingId === deactivating?.id}
+              onClick={() => deactivating && setActive(deactivating, false)}
+            >
+              {savingId === deactivating?.id ? "Deactivating…" : "Deactivate"}
+            </Button>
+          </>
+        }
+      >
+        <p>
+          <span className="font-semibold text-slate-900">{deactivating?.name}</span>
+          {deactivating?.email && <span className="text-slate-400"> ({deactivating.email})</span>} will:
+        </p>
+        <ul className="mt-3 list-disc space-y-1.5 pl-5">
+          <li>Lose access immediately — they will be signed out of the mobile app and cannot sign back in.</li>
+          <li>Receive a push notification on their phone telling them their account was deactivated.</li>
+        </ul>
+        <p className="mt-3 text-slate-500">
+          Their calls, leads, and history are kept. You can reactivate them from this page at any time.
+        </p>
+      </Modal>
     </div>
   );
 }

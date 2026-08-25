@@ -49,6 +49,13 @@ function EditLeadModal({
   }, [open, lead]);
 
   async function save() {
+    // A contact that has calls but no Lead row comes back with id: null — there
+    // is no record on the server to PATCH, so refuse rather than build a
+    // /api/leads/null/details URL.
+    if (!lead.id) {
+      setError("This contact doesn't have a lead record yet, so there's nothing to edit.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -130,7 +137,17 @@ const stagePill: Record<string, string> = {
   Negotiation: "bg-amber-50 text-amber-700",
   "Closed Won": "bg-emerald-50 text-emerald-700",
   "Closed Lost": "bg-red-50 text-red-700",
-  Junk: "bg-slate-100 text-slate-400",
+  Junk: "bg-slate-100 text-slate-600",
+};
+
+// Per-call sentiment from the debrief. Always rendered WITH its label — the
+// pill colour is a second channel, never the only one carrying the meaning.
+const sentimentPill: Record<string, string> = {
+  Positive: "bg-emerald-50 text-emerald-700",
+  Neutral: "bg-slate-100 text-slate-600",
+  Mixed: "bg-amber-50 text-amber-700",
+  Objection: "bg-amber-50 text-amber-700",
+  Negative: "bg-red-50 text-red-700",
 };
 
 const factDot: Record<string, string> = {
@@ -173,21 +190,32 @@ function LeadDetailContent() {
   const [lead, setLead] = useState<LeadDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [editing, setEditing] = useState(false);
   const [zombieDays, setZombieDays] = useState(DEFAULT_ZOMBIE_DAYS);
 
   function load() {
+    // No ?id= is not a transient failure — load() would re-check this and set
+    // the same error forever, so the old Retry button could never succeed.
+    // The dedicated "no lead specified" branch below handles it instead.
     if (!id) {
-      setError("No lead specified.");
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
+    setNotFound(false);
     leadsApi
       .detail(id)
       .then(setLead)
-      .catch((e) => setError(e instanceof ApiError ? e.message : "Failed to load lead"))
+      .catch((e) => {
+        // 404 = deleted, or an id belonging to another org (the backend scopes
+        // by org and 404s rather than 403s). Either way retrying can only
+        // produce the same 404 — send it to a dead-end state, not a red banner
+        // with a Retry that will never work.
+        if (e instanceof ApiError && e.status === 404) setNotFound(true);
+        else setError(e instanceof ApiError ? e.message : "Failed to load lead");
+      })
       .finally(() => setLoading(false));
   }
 
@@ -201,18 +229,45 @@ function LeadDetailContent() {
       .catch(() => {}); // keep the built-in default — this banner still degrades gracefully
   }, []);
 
-  const stuck = !!lead && OPEN_STAGES.includes(lead.pipeline_stage) && lead.days_stuck >= zombieDays;
+  // pipeline_stage is null for a contact with calls but no Lead row — it can't
+  // be "stuck in a stage" it was never in.
+  const stuck = !!lead?.pipeline_stage && OPEN_STAGES.includes(lead.pipeline_stage) && lead.days_stuck >= zombieDays;
+
+  const backLink = (
+    <div className="px-4 pt-6 sm:px-6 lg:px-8">
+      <Link href="/dashboard/leads" className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-primary-600">
+        <ArrowLeft className="size-3.5" /> All Leads
+      </Link>
+    </div>
+  );
+
+  if (!id || notFound) {
+    return (
+      <div className="pb-10">
+        {backLink}
+        <div className="mt-4 px-4 sm:px-6 lg:px-8">
+          <Card className="p-6">
+            <h1 className="text-base font-semibold text-slate-900">{id ? "Lead not found" : "No lead specified"}</h1>
+            <p className="mt-1 text-sm text-slate-600">
+              {id
+                ? "This lead has been deleted, or it belongs to another organisation."
+                : "This page needs a lead to open. Pick one from the leads list."}
+            </p>
+            <Link href="/dashboard/leads" className="mt-4 inline-block">
+              <Button size="sm">Go to All Leads</Button>
+            </Link>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pb-10">
-      <div className="px-4 pt-6 sm:px-6 lg:px-8">
-        <Link href="/dashboard/leads" className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-primary-600">
-          <ArrowLeft className="size-3.5" /> All Leads
-        </Link>
-      </div>
+      {backLink}
 
       {error && (
-        <div className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div role="alert" className="mt-4 mx-4 sm:mx-6 lg:mx-8 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error} —{" "}
           <button className="font-semibold underline" onClick={load}>
             Retry
@@ -242,8 +297,15 @@ function LeadDetailContent() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h1 className="text-xl font-bold text-slate-900">{lead.name}</h1>
-                    <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", stagePill[lead.pipeline_stage])}>
-                      {lead.pipeline_stage}
+                    {/* A contact with calls but no Lead row has no stage yet —
+                        say so rather than rendering an empty, untoned pill. */}
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-xs font-medium",
+                        stagePill[lead.pipeline_stage ?? ""] ?? "bg-slate-100 text-slate-600"
+                      )}
+                    >
+                      {lead.pipeline_stage ?? "No stage yet"}
                     </span>
                     {lead.score != null && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-mono text-xs font-bold text-slate-700">
@@ -255,7 +317,9 @@ function LeadDetailContent() {
                     {lead.phone ?? "No phone on file"}
                     {lead.telecaller_name && <> · Assigned to {lead.telecaller_name}</>}
                   </p>
-                  <CopyableId id={lead.id} className="mt-1" />
+                  {/* No Lead row = no id to copy — a support conversation has
+                      nothing to reference yet. */}
+                  {lead.id && <CopyableId id={lead.id} className="mt-1" />}
                 </div>
                 <div className="flex items-center gap-2">
                   {lead.phone && (
@@ -265,7 +329,13 @@ function LeadDetailContent() {
                       </Button>
                     </a>
                   )}
-                  <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditing(true)}
+                    disabled={!lead.id}
+                    title={lead.id ? undefined : "This contact doesn't have a lead record to edit yet"}
+                  >
                     <Pencil className="size-3.5" /> Edit Lead
                   </Button>
                 </div>
@@ -280,27 +350,27 @@ function LeadDetailContent() {
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Lead Details</h3>
               <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
                 <div>
-                  <dt className="text-xs text-slate-400">Enquiry</dt>
+                  <dt className="text-xs text-slate-600">Enquiry</dt>
                   <dd className="mt-0.5 text-slate-800">{lead.reason || "—"}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-400">Source</dt>
+                  <dt className="text-xs text-slate-600">Source</dt>
                   <dd className="mt-0.5 text-slate-800">{lead.source || "—"}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-400">Deal Value</dt>
+                  <dt className="text-xs text-slate-600">Deal Value</dt>
                   <dd className="mt-0.5 font-mono text-slate-800">{lead.deal_value != null ? formatINR(lead.deal_value) : "—"}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-400">Owner</dt>
+                  <dt className="text-xs text-slate-600">Owner</dt>
                   <dd className="mt-0.5 text-slate-800">{lead.telecaller_name || "Unassigned"}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-400">Created</dt>
+                  <dt className="text-xs text-slate-600">Created</dt>
                   <dd className="mt-0.5 text-slate-800">{fmtDateTime(lead.created_at)}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-400">Calls So Far</dt>
+                  <dt className="text-xs text-slate-600">Calls So Far</dt>
                   <dd className="mt-0.5 text-slate-800">{lead.touchpoints.length}</dd>
                 </div>
               </dl>
@@ -316,7 +386,7 @@ function LeadDetailContent() {
                   {lead.follow_up.note && <p className="mt-1 text-sm text-slate-500">{lead.follow_up.note}</p>}
                 </>
               ) : (
-                <p className="mt-2 text-sm text-slate-400">No follow-up scheduled.</p>
+                <p className="mt-2 text-sm text-slate-600">No follow-up scheduled.</p>
               )}
             </Card>
           </div>
@@ -333,11 +403,11 @@ function LeadDetailContent() {
                 )}
               </div>
               {!lead.memory ? (
-                <p className="mt-3 text-sm text-slate-400">Not enough contact yet for the AI to build a picture.</p>
+                <p className="mt-3 text-sm text-slate-600">Not enough contact yet for the AI to build a picture.</p>
               ) : (
                 <>
                   {lead.memory.headline && <p className="mt-2 text-sm font-medium text-slate-700">{lead.memory.headline}</p>}
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-1 text-xs text-slate-600">
                     Built from {lead.memory.total_calls} {lead.memory.total_calls === 1 ? "call" : "calls"}
                     {lead.memory.sentiment_trend && <> · sentiment {lead.memory.sentiment_trend}</>}
                   </p>
@@ -385,24 +455,29 @@ function LeadDetailContent() {
             <Card>
               <div className="p-5 pb-0">
                 <h3 className="text-sm font-semibold text-slate-900">Every Touchpoint</h3>
-                <p className="mt-0.5 text-xs text-slate-400">Calls in one thread, newest first</p>
+                <p className="mt-0.5 text-xs text-slate-600">Calls in one thread, newest first</p>
               </div>
               {lead.touchpoints.length === 0 ? (
-                <p className="px-5 py-6 text-sm text-slate-400">No contact yet. The first call will show up here.</p>
+                <p className="px-5 py-6 text-sm text-slate-600">No contact yet. The first call will show up here.</p>
               ) : (
                 <div className="mt-3 divide-y divide-slate-100">
                   {lead.touchpoints.map((t) => (
                     <div key={t.call_id} className="flex flex-col gap-1.5 px-5 py-3">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs text-slate-400">{fmtDateTime(t.timestamp)}</span>
+                        <span className="font-mono text-xs text-slate-600">{fmtDateTime(t.timestamp)}</span>
                         {t.score != null && (
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-600">
                             Score {t.score}
                           </span>
                         )}
                         {t.lead_verdict && (
-                          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", VERDICT_TONE[t.lead_verdict] ?? "bg-slate-100 text-slate-500")}>
+                          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", VERDICT_TONE[t.lead_verdict] ?? "bg-slate-100 text-slate-600")}>
                             {t.lead_verdict}
+                          </span>
+                        )}
+                        {t.sentiment && (
+                          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", sentimentPill[t.sentiment] ?? "bg-slate-100 text-slate-600")}>
+                            {t.sentiment} sentiment
                           </span>
                         )}
                         <Link
@@ -427,7 +502,7 @@ function LeadDetailContent() {
                   <Copy className="size-4 text-slate-400" />
                   <h3 className="text-sm font-semibold text-slate-900">Possible Duplicates</h3>
                 </div>
-                <p className="mt-0.5 text-xs text-slate-400">Same phone number seen on other leads</p>
+                <p className="mt-0.5 text-xs text-slate-600">Same phone number seen on other leads</p>
                 <div className="mt-3 flex flex-col gap-2">
                   {lead.duplicates.map((d) => (
                     <Link
@@ -471,7 +546,7 @@ function LeadDetailContent() {
           )}
         </>
       ) : (
-        !error && <p className="mt-6 px-4 text-sm text-slate-400 sm:px-6 lg:px-8">Lead not found.</p>
+        !error && <p className="mt-6 px-4 text-sm text-slate-600 sm:px-6 lg:px-8">Lead not found.</p>
       )}
     </div>
   );

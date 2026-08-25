@@ -44,8 +44,35 @@ body {
 }
 
 @layer components {
+  /* The focus ring was primary-100 (#e0e5ff) on white — about 1.15:1, far
+     below the 3:1 that WCAG 2.2 SC 1.4.11 requires for a non-text indicator,
+     and it replaced the native outline that would otherwise have been visible.
+     primary-600 clears the threshold on both the white field and the tinted
+     card surfaces the inputs sit on. */
   .input {
-    @apply w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100;
+    @apply w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-600/70;
+  }
+}
+
+/* Safety net: several screens hand-roll bare <button>/<select>/<a> elements
+   instead of using the Button primitive, and Tailwind's preflight removes the
+   UA outline. Without this, keyboard focus is invisible on those controls. */
+@layer base {
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-primary-600);
+    outline-offset: 2px;
+    border-radius: 0.375rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
