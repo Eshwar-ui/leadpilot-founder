@@ -209,7 +209,10 @@ export default function OnboardingPage() {
         </div>
       </div>
 
-      <div className="flex flex-1 items-center justify-center bg-white px-6 py-12">
+      {/* items-start (not centered): Step 3's logo dropzone makes it visibly
+          taller than Step 1, and vertical centering made the whole form jump
+          position between steps. Top-anchored, it holds still. */}
+      <div className="flex flex-1 items-start justify-center bg-white px-6 pb-12 pt-16">
         <div className="w-full max-w-2xl">
           <div className="mb-10">
             <StepIndicator step={step} />
@@ -247,7 +250,7 @@ export default function OnboardingPage() {
                     placeholder="https://..."
                     className="input"
                   />
-                  <p className="mt-1.5 text-xs text-amber-700">● AI will scan this to learn about your business</p>
+                  <p className="mt-1.5 text-xs text-slate-500">● AI will scan this to learn about your business</p>
                 </Field>
                 <Field label="Primary Languages">
                   <div className="flex flex-wrap gap-2">
@@ -257,7 +260,7 @@ export default function OnboardingPage() {
                         type="button"
                         onClick={() => toggleLanguage(lang)}
                         className={cn(
-                          "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
+                          "rounded-full border px-4 py-3 text-sm font-medium transition-colors",
                           languages.includes(lang)
                             ? "border-amber-600 bg-amber-50 text-amber-700"
                             : "border-slate-200 text-slate-600 hover:bg-slate-50"
