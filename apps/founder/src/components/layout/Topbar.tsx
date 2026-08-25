@@ -201,7 +201,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
         >
           <Menu className="size-5" />
         </button>
-        <img src="/asan-mark.png" alt="" className="h-7 w-auto shrink-0" />
+        <img src="/asan-mark-light.png" alt="" className="h-7 w-auto shrink-0" />
         <span className="truncate text-sm font-bold text-slate-900">LeadPilot</span>
         <span className="hidden shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 sm:inline">
           Founder

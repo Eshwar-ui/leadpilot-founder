@@ -22,7 +22,7 @@ export function AuthShell({
 
         <div className="relative flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src="/asan-mark.png" alt="" className="h-8 w-auto shrink-0" />
+            <img src="/asan-mark-dark.png" alt="" className="h-8 w-auto shrink-0" />
             <span className="text-base font-bold text-white">LeadPilot</span>
           </div>
           <span className="rounded-full border border-gold-400/20 bg-gold-400/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-gold-300/90">

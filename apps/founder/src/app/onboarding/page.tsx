@@ -250,7 +250,7 @@ export default function OnboardingPage() {
         <div className="pointer-events-none absolute -bottom-32 -right-16 size-80 rounded-full bg-gold-600/[0.06] blur-3xl" />
 
         <div className="relative flex items-center gap-2.5">
-          <img src="/asan-mark.png" alt="" className="h-8 w-auto shrink-0" />
+          <img src="/asan-mark-dark.png" alt="" className="h-8 w-auto shrink-0" />
           <span className="text-base font-bold text-white">LeadPilot</span>
         </div>
 
