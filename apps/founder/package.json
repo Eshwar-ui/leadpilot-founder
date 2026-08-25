@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "NEXT_PUBLIC_API_URL=https://leadpilot-backend-perc.onrender.com next build",
     "start": "serve out -l ${PORT:-3000}",
     "lint": "eslint"
   },
