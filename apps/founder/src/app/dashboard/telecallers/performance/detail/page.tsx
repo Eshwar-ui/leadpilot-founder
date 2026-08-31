@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, KeyRound, Pencil } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -17,7 +17,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { SkillRadar } from "@/components/charts/SkillRadar";
-import { EditTelecallerModal, ROLE_LABEL } from "@/components/team/TeamMemberModals";
+import { EditTelecallerModal, ResetPasswordModal, ROLE_LABEL } from "@/components/team/TeamMemberModals";
 import { ApiError, teamApi, telecallersApi, type TeamMember, type TelecallerPerformanceDetail } from "@/lib/api";
 import { cn, formatINR, formatSeconds, initials, TELECALLER_STATUS_DOT, TELECALLER_STATUS_PILL, VERDICT_TONE } from "@/lib/utils";
 
@@ -54,6 +54,7 @@ function TelecallerDetailContent() {
   // already uses) so the edit modal has real current values, not guesses.
   const [member, setMember] = useState<TeamMember | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
 
   function load() {
     if (!id) {
@@ -128,9 +129,14 @@ function TelecallerDetailContent() {
                     </p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} disabled={!member}>
-                  <Pencil className="size-3.5" /> Edit
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setResetOpen(true)} disabled={!member}>
+                    <KeyRound className="size-3.5" /> Reset Password
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} disabled={!member}>
+                    <Pencil className="size-3.5" /> Edit
+                  </Button>
+                </div>
               </div>
             </Card>
           </div>
@@ -299,6 +305,11 @@ function TelecallerDetailContent() {
         member={member}
         onClose={() => setEditOpen(false)}
         onSaved={setMember}
+      />
+      <ResetPasswordModal
+        open={resetOpen}
+        member={member}
+        onClose={() => setResetOpen(false)}
       />
     </div>
   );

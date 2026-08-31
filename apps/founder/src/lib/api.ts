@@ -254,6 +254,7 @@ export const teamApi = {
 
 export type BoardLead = {
   id: string;
+  display_id: string;
   name: string;
   phone: string | null;
   reason: string | null;
@@ -295,6 +296,7 @@ export type LeadDetail = {
   // pipeline_stage: null (a documented, supported path in the backend).
   // Guard before calling .slice()/.startsWith() on either.
   id: string | null;
+  display_id: string | null;
   name: string;
   phone: string | null;
   reason: string | null;
@@ -338,7 +340,7 @@ export const leadsApi = {
     );
   },
   createLead(input: { name: string; phone?: string; reason?: string }) {
-    return authedRequest<{ contact_key: string; name: string; status: string; created: boolean }>(
+    return authedRequest<{ contact_key: string; name: string; status: string; display_id: string; created: boolean }>(
       "/api/leads",
       {
         method: "POST",

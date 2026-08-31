@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, AlertTriangle, Bell, CheckCircle2, ChevronRight, Inbox, Info, LogOut, Menu, Search, Users2 } from "lucide-react";
 import { clearSession, getStoredUser } from "@/lib/auth";
 import { markReachable } from "@/lib/connectivity";
+import { AsanLogo } from "@/components/AsanLogo";
 import {
   leadsApi,
   notificationsApi,
@@ -133,7 +134,11 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return { leads: [], telecallers: [] };
     return {
-      leads: (searchLeads ?? []).filter((l) => l.name.toLowerCase().includes(q) || l.phone?.toLowerCase().includes(q)).slice(0, 6),
+      leads: (searchLeads ?? []).filter((l) =>
+        l.name.toLowerCase().includes(q) ||
+        l.phone?.toLowerCase().includes(q) ||
+        l.display_id.toLowerCase().includes(q)
+      ).slice(0, 6),
       telecallers: (searchTelecallers ?? []).filter((t) => t.name.toLowerCase().includes(q)).slice(0, 4),
     };
   }, [searchQuery, searchLeads, searchTelecallers]);
@@ -201,8 +206,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
         >
           <Menu className="size-5" />
         </button>
-        <img src="/asan-mark-dark.png" alt="" className="h-7 w-auto shrink-0" />
-        <span className="truncate text-sm font-bold text-slate-900">LeadPilot</span>
+        <AsanLogo onLight className="h-11 w-[5.5rem]" />
         <span className="hidden shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 sm:inline">
           Founder
         </span>
@@ -225,7 +229,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
                   ref={searchInputRef}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search leads or telecallers by name…"
+                  placeholder="Search by name, phone, or lead ID…"
                   className="w-full text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
                 />
               </div>

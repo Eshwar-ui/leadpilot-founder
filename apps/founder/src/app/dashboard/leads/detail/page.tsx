@@ -319,7 +319,7 @@ function LeadDetailContent() {
                   </p>
                   {/* No Lead row = no id to copy — a support conversation has
                       nothing to reference yet. */}
-                  {lead.id && <CopyableId id={lead.id} className="mt-1" />}
+                  {lead.id && <CopyableId id={lead.id} displayId={lead.display_id} className="mt-1" />}
                 </div>
                 <div className="flex items-center gap-2">
                   {lead.phone && (

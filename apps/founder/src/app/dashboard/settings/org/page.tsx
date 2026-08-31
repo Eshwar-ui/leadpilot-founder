@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Trash2, Upload } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { TagInput } from "@/components/ui/TagInput";
@@ -11,9 +11,12 @@ import { getStoredUser, updateStoredOrgName } from "@/lib/auth";
 import { ApiError, orgApi, type AuthUser, type OrgProfile, type OrgProfileInput } from "@/lib/api";
 import { useUnsavedChanges, UNSAVED_WARNING } from "@/lib/useUnsavedChanges";
 import { cn, initials } from "@/lib/utils";
+import { INDUSTRY_OPTIONS } from "@/lib/industries";
 
 const LANGUAGE_OPTIONS = ["English", "Hindi", "Telugu", "Tamil", "Kannada"];
 const VOICE_OPTIONS = ["Premium", "Friendly", "Authoritative", "Casual"];
+const MAX_LOGO_BYTES = 5 * 1024 * 1024;
+const LOGO_TYPES = new Set(["image/svg+xml", "image/png", "image/jpeg"]);
 
 
 function SettingsField({
@@ -50,6 +53,7 @@ function textOrNull(value: string | null | undefined): string | null {
 function editableSnapshot(p: OrgProfile): string {
   return JSON.stringify([
     p.name,
+    p.logo_url ?? null,
     p.industry ?? null,
     p.website_url ?? null,
     p.address ?? null,
@@ -79,8 +83,10 @@ export default function OrgProfilePage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [saved, setSaved] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
 
   const formId = useId();
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   function load() {
     setLoading(true);
@@ -118,6 +124,23 @@ export default function OrgProfilePage() {
     update("languages", current.includes(lang) ? current.filter((l) => l !== lang) : [...current, lang]);
   }
 
+  function handleLogoSelect(file: File | undefined) {
+    setLogoError(null);
+    if (!file) return;
+    if (!LOGO_TYPES.has(file.type)) {
+      setLogoError("Use an SVG, PNG, or JPG file.");
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      setLogoError("File is too large — maximum 5 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => update("logo_url", reader.result as string);
+    reader.onerror = () => setLogoError("Couldn’t read that file — try another.");
+    reader.readAsDataURL(file);
+  }
+
   function validate(p: OrgProfile): FieldErrors {
     const errors: FieldErrors = {};
     if (p.name.trim().length < 2) errors.name = "Organisation name needs at least 2 characters.";
@@ -153,6 +176,7 @@ export default function OrgProfilePage() {
       // is valid and does clear the column.
       const payload: OrgProfileInput = {
         name: profile.name.trim(),
+        logo_url: profile.logo_url ?? null,
         industry: textOrNull(profile.industry),
         website_url: textOrNull(profile.website_url),
         services: profile.services ?? [],
@@ -287,13 +311,67 @@ export default function OrgProfilePage() {
               </SettingsField>
               <SettingsField label="Industry">
                 {(id) => (
-                  <input
-                    id={id}
-                    value={profile.industry ?? ""}
-                    onChange={(e) => update("industry", e.target.value)}
-                    placeholder="e.g. Real Estate"
-                    className="input"
-                  />
+                  <>
+                    <input
+                      id={id}
+                      list={`${id}-options`}
+                      value={profile.industry ?? ""}
+                      onChange={(e) => update("industry", e.target.value)}
+                      placeholder="e.g. Real Estate"
+                      className="input"
+                    />
+                    <datalist id={`${id}-options`}>
+                      {INDUSTRY_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt} />
+                      ))}
+                    </datalist>
+                  </>
+                )}
+              </SettingsField>
+              <SettingsField label="Organisation Logo" className="sm:col-span-2">
+                {(id) => (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <input
+                      ref={logoInputRef}
+                      id={id}
+                      type="file"
+                      accept="image/svg+xml,image/png,image/jpeg"
+                      className="sr-only"
+                      onChange={(e) => {
+                        handleLogoSelect(e.target.files?.[0]);
+                        e.currentTarget.value = "";
+                      }}
+                    />
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white p-2">
+                        {profile.logo_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={profile.logo_url} alt="Organisation logo preview" className="size-full object-contain" />
+                        ) : (
+                          <span className="text-lg font-bold text-slate-400">{initials(profile.name) || "ORG"}</span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {profile.logo_url ? "Logo ready" : "Add your organisation logo"}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-600">
+                          Shown to telecallers in the mobile app. SVG, PNG, or JPG; maximum 5 MB.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button type="button" size="sm" variant="outline" onClick={() => logoInputRef.current?.click()}>
+                            <Upload className="size-3.5" /> {profile.logo_url ? "Replace Logo" : "Upload Logo"}
+                          </Button>
+                          {profile.logo_url && (
+                            <Button type="button" size="sm" variant="outline" onClick={() => update("logo_url", null)}>
+                              <Trash2 className="size-3.5" /> Remove
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {logoError && <p role="alert" className="mt-2 text-xs font-medium text-red-600">{logoError}</p>}
+                  </div>
                 )}
               </SettingsField>
               <SettingsField label="Website URL" className="sm:col-span-2">

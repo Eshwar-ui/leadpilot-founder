@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, LogOut, Upload } from "lucide-react";
+import { AsanLogo } from "@/components/AsanLogo";
 import { StepIndicator } from "@/components/onboarding/StepIndicator";
 import { SignalLockPanel } from "@/components/auth/SignalLockPanel";
 import { Button } from "@/components/ui/Button";
@@ -11,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { ApiError, authApi, orgApi } from "@/lib/api";
 import { clearSession, getToken } from "@/lib/auth";
 import { markReachable } from "@/lib/connectivity";
+import { INDUSTRY_OPTIONS } from "@/lib/industries";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024; // 5MB, matches the dropzone's own copy
 
@@ -176,7 +178,7 @@ export default function OnboardingPage() {
   // engaging leads. Pricing, USPs, competitors, and the logo stay optional.
   const stepValid =
     step === 1
-      ? Boolean(orgName.trim() && industry)
+      ? Boolean(orgName.trim() && industry.trim())
       : step === 2
         ? Boolean(services.length && targetAudience.trim())
         : step === 3
@@ -249,17 +251,14 @@ export default function OnboardingPage() {
         <div className="pointer-events-none absolute -left-24 -top-24 size-72 rounded-full bg-gold-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 -right-16 size-80 rounded-full bg-gold-600/[0.06] blur-3xl" />
 
-        <div className="relative flex items-center gap-2.5">
-          <img src="/asan-mark-dark.png" alt="" className="h-8 w-auto shrink-0" />
-          <span className="text-base font-bold text-white">LeadPilot</span>
-        </div>
+        <AsanLogo className="relative h-11 w-20" />
 
         <div className="relative">
           <h1 className="text-2xl font-bold leading-tight tracking-tight text-white">{meta.headline}</h1>
           <p className="mt-3 max-w-sm text-sm text-slate-400">{meta.description}</p>
 
           {/* Same signal-lock motif as the login/register hero — the corner
-              brackets echo the LeadPilot mark instead of an unrelated shape. */}
+              brackets echo the Asan Innovators mark instead of an unrelated shape. */}
           <SignalLockPanel height="h-56" ringSize="size-32" coreSize="size-24" badges={meta.badges} />
         </div>
 
@@ -303,15 +302,18 @@ export default function OnboardingPage() {
                   />
                 </Field>
                 <Field label="Industry">
-                  <select value={industry} onChange={(e) => setIndustry(e.target.value)} className="input">
-                    <option value="" disabled>
-                      Select your industry…
-                    </option>
-                    <option>Real Estate</option>
-                    <option>SaaS</option>
-                    <option>Financial Services</option>
-                    <option>Education</option>
-                  </select>
+                  <input
+                    list="onboarding-industry-options"
+                    value={industry}
+                    onChange={(e) => setIndustry(e.target.value)}
+                    placeholder="e.g. Real Estate"
+                    className="input"
+                  />
+                  <datalist id="onboarding-industry-options">
+                    {INDUSTRY_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt} />
+                    ))}
+                  </datalist>
                 </Field>
                 <Field label="Website URL">
                   <input

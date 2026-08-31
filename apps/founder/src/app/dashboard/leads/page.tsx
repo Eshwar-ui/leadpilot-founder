@@ -90,7 +90,7 @@ export default function AllLeadsPage() {
     const q = query.trim().toLowerCase();
     if (q) {
       out = out.filter((l) =>
-        `${l.name} ${l.phone ?? ""} ${l.reason ?? ""}`.toLowerCase().includes(q)
+        `${l.display_id} ${l.name} ${l.phone ?? ""} ${l.reason ?? ""}`.toLowerCase().includes(q)
       );
     }
     return out;
@@ -106,10 +106,10 @@ export default function AllLeadsPage() {
   }
 
   function exportCsv() {
-    const header = ["Name", "Phone", "Source", "Stage", "Score", "Value", "Owner", "Last Update"];
+    const header = ["Lead ID", "Name", "Phone", "Source", "Stage", "Score", "Value", "Owner", "Last Update"];
     const escape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
     const rows = visible.map((l) =>
-      [l.name, l.phone ?? "", l.source ?? "", l.pipeline_stage, l.score ?? "", l.deal_value ?? "", l.telecaller_name ?? "", `${l.days_stuck}d`]
+      [l.display_id, l.name, l.phone ?? "", l.source ?? "", l.pipeline_stage, l.score ?? "", l.deal_value ?? "", l.telecaller_name ?? "", `${l.days_stuck}d`]
         .map((c) => escape(String(c)))
         .join(",")
     );
@@ -148,8 +148,8 @@ export default function AllLeadsPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search name, phone or enquiry"
-              aria-label="Search leads by name, phone or enquiry"
+              placeholder="Search ID, name, phone, or enquiry"
+              aria-label="Search leads by ID, name, phone, or enquiry"
               className="w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
             />
           </div>
@@ -284,7 +284,7 @@ export default function AllLeadsPage() {
                           {l.name}
                         </Link>
                         {l.phone && <span className="block text-xs text-slate-600">{l.phone}</span>}
-                        <CopyableId id={l.id} className="mt-0.5" />
+                        <CopyableId id={l.id} displayId={l.display_id} className="mt-0.5" />
                       </td>
                       <td className="max-w-[220px] truncate px-3 py-3 text-slate-500">{l.reason || "—"}</td>
                       <td className="px-3 py-3 text-slate-500">{l.source || "—"}</td>

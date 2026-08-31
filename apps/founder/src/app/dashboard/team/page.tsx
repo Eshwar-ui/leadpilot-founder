@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BellRing, Check, Copy, UserPlus } from "lucide-react";
+import { BellRing, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { StatCard } from "@/components/ui/StatCard";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { SkeletonStatCard, SkeletonTableRow } from "@/components/ui/Skeleton";
+import { ResetPasswordModal, SecretValue } from "@/components/team/TeamMemberModals";
 import { ApiError, teamApi, type TeamMember } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -52,45 +53,6 @@ function activityState(lastActive: string | null): { dot: string; label: string 
  * Adapted from ui/CopyableId — that one truncates to 8 chars for table rows,
  * which would silently hand the founder half a password. Here the value must
  * be shown and copied in full, because the API never returns it again. */
-function SecretValue({ value, label }: { value: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API is unavailable on insecure origins / older browsers —
-      // the value is still visible above, so failing silently is safe. Select
-      // it so the founder can copy by hand.
-      setCopied(false);
-    }
-  }
-
-  return (
-    <div className="flex items-stretch gap-2">
-      <code className="flex-1 select-all break-all rounded-lg bg-slate-100 px-3 py-2 font-mono text-sm text-slate-800">
-        {value}
-      </code>
-      <button
-        type="button"
-        onClick={copy}
-        aria-label={copied ? `${label} copied to clipboard` : `Copy ${label} to clipboard`}
-        className={cn(
-          "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors",
-          copied
-            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-            : "border-slate-200 text-slate-700 hover:bg-slate-50"
-        )}
-      >
-        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-        {copied ? "Copied" : "Copy"}
-      </button>
-    </div>
-  );
-}
-
 export default function ManageTeamPage() {
   const [tab, setTab] = useState("all");
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -107,10 +69,6 @@ export default function ManageTeamPage() {
   const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   const [resetMember, setResetMember] = useState<TeamMember | null>(null);
-  const [resetCustomPassword, setResetCustomPassword] = useState("");
-  const [resetTempPassword, setResetTempPassword] = useState<string | null>(null);
-  const [resetError, setResetError] = useState<string | null>(null);
-  const [resetSubmitting, setResetSubmitting] = useState(false);
 
   const [notifyMember, setNotifyMember] = useState<TeamMember | null>(null);
   const [notifyTitle, setNotifyTitle] = useState("Message from your founder");
@@ -145,12 +103,6 @@ export default function ManageTeamPage() {
     setTempPassword(null);
   }
 
-  function closeReset() {
-    setResetMember(null);
-    setResetTempPassword(null);
-    setResetCustomPassword("");
-  }
-
   function openInvite() {
     setInviteEmail("");
     setInviteName("");
@@ -177,31 +129,6 @@ export default function ManageTeamPage() {
       setInviteError(e instanceof ApiError ? e.message : "Failed to invite member");
     } finally {
       setInviteSubmitting(false);
-    }
-  }
-
-  function openResetPassword(member: TeamMember) {
-    setResetMember(member);
-    setResetCustomPassword("");
-    setResetTempPassword(null);
-    setResetError(null);
-  }
-
-  async function submitResetPassword() {
-    if (!resetMember) return;
-    if (resetCustomPassword && resetCustomPassword.length < 8) {
-      setResetError("Password must be at least 8 characters");
-      return;
-    }
-    setResetSubmitting(true);
-    setResetError(null);
-    try {
-      const { temp_password } = await teamApi.resetPassword(resetMember.id, resetCustomPassword || undefined);
-      setResetTempPassword(temp_password);
-    } catch (e) {
-      setResetError(e instanceof ApiError ? e.message : "Failed to reset password");
-    } finally {
-      setResetSubmitting(false);
     }
   }
 
@@ -380,7 +307,7 @@ export default function ManageTeamPage() {
                           )}
                           <button
                             className="text-xs font-semibold text-primary-600 hover:underline"
-                            onClick={() => openResetPassword(m)}
+                            onClick={() => setResetMember(m)}
                           >
                             Reset Password
                           </button>
@@ -544,65 +471,11 @@ export default function ManageTeamPage() {
         )}
       </Modal>
 
-      <Modal
+      <ResetPasswordModal
         open={resetMember !== null}
-        onClose={closeReset}
-        title={resetTempPassword ? "Password reset" : "Reset Password"}
-        footer={
-          resetTempPassword ? (
-            <Button size="sm" className="w-full" onClick={closeReset}>
-              Done
-            </Button>
-          ) : (
-            <>
-              <Button size="sm" variant="outline" className="flex-1" onClick={closeReset}>
-                Cancel
-              </Button>
-              <Button size="sm" className="flex-1" onClick={submitResetPassword} disabled={resetSubmitting}>
-                {resetSubmitting ? "Resetting…" : "Reset Password"}
-              </Button>
-            </>
-          )
-        }
-      >
-        {resetTempPassword ? (
-          <div className="space-y-2">
-            <p>
-              <span className="font-semibold text-slate-900">{resetMember?.name}</span>&apos;s password was
-              reset. Share this {resetCustomPassword ? "" : "temporary "}password with them — it won&apos;t be
-              shown again.
-            </p>
-            <SecretValue
-              value={resetTempPassword}
-              label={resetCustomPassword ? "password" : "temporary password"}
-            />
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {resetError && <p role="alert" className="text-xs font-medium text-red-600">{resetError}</p>}
-            <p>
-              Reset the password for <span className="font-semibold text-slate-900">{resetMember?.name}</span>?
-              Their current password will stop working immediately.
-            </p>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-500">
-                New Password (optional)
-              </label>
-              <input
-                type="text"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono"
-                value={resetCustomPassword}
-                onChange={(e) => setResetCustomPassword(e.target.value)}
-                placeholder="Leave blank to auto-generate one"
-              />
-              <p className="mt-1 text-xs text-slate-400">
-                Set a specific password, or leave this blank to generate a random temporary one.
-                Either way, they&apos;ll need to change it the next time they log in.
-              </p>
-            </div>
-          </div>
-        )}
-      </Modal>
+        member={resetMember}
+        onClose={() => setResetMember(null)}
+      />
     </div>
   );
 }

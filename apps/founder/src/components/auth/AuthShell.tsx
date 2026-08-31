@@ -1,4 +1,5 @@
 import { Sparkles } from "lucide-react";
+import { AsanLogo } from "@/components/AsanLogo";
 import { SignalLockPanel } from "@/components/auth/SignalLockPanel";
 
 export function AuthShell({
@@ -21,10 +22,7 @@ export function AuthShell({
         <div className="pointer-events-none absolute -bottom-32 -right-16 size-80 rounded-full bg-gold-600/[0.06] blur-3xl" />
 
         <div className="relative flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <img src="/asan-mark-dark.png" alt="" className="h-8 w-auto shrink-0" />
-            <span className="text-base font-bold text-white">LeadPilot</span>
-          </div>
+          <AsanLogo className="h-11 w-20" />
           <span className="rounded-full border border-gold-400/20 bg-gold-400/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-gold-300/90">
             Founder Portal
           </span>

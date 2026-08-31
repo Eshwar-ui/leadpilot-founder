@@ -8,7 +8,7 @@ const DOT_TONE: Record<string, string> = {
 /**
  * The gold "signal-lock" hero visual shared by the login/register hero panel
  * (AuthShell) and the onboarding wizard's side panel — the same corner-bracket
- * language as the LeadPilot mark, framing a pulsing signal instead of a
+ * language as the Asan Innovators mark, framing a pulsing signal instead of a
  * wordmark or an unrelated decorative shape. `height`/`ringSize`/`coreSize`
  * let each caller fit it to its own panel without duplicating the markup.
  */
