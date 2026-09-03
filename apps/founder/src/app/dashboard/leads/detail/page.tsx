@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Phone, Copy, Flame, Sparkles, Pencil } from "lucide-react";
+import { ArrowLeft, Phone, Copy, Flame, Sparkles, Pencil, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -40,7 +40,10 @@ function EditLeadModal({
     setSource(lead.source ?? "");
     setDealValue(lead.deal_value != null ? String(lead.deal_value) : "");
     setReason(lead.reason ?? "");
-    setAssignedTo("");
+    // Preselect the lead's actual owner. The old "" default meant the dropdown
+    // opened on a "(keep current)" placeholder, so the founder had to read the
+    // Owner row elsewhere on the page to know who it was already assigned to.
+    setAssignedTo(lead.assigned_to ?? "");
     setError(null);
     teamApi
       .list()
@@ -65,7 +68,9 @@ function EditLeadModal({
         source: source.trim() || null,
         reason: reason.trim() || null,
         deal_value: dealValue.trim() ? Number(dealValue) : null,
-        assigned_to: assignedTo || undefined, // "" means the "(keep current)" option — omit, don't clear
+        // "" is the Unassigned option, which is a real choice (a lead can be
+        // parked with no owner), so it is sent rather than omitted.
+        assigned_to: assignedTo || undefined,
       });
       onSaved();
       onClose();
@@ -109,7 +114,7 @@ function EditLeadModal({
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-slate-500">Assigned Telecaller</span>
           <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className="input">
-            <option value="">{lead.telecaller_name ?? "Unassigned"} (keep current)</option>
+            <option value="">Unassigned</option>
             {telecallers.map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
@@ -124,6 +129,95 @@ function EditLeadModal({
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} className="input" />
         </label>
       </div>
+    </Modal>
+  );
+}
+
+function DeleteLeadModal({
+  lead,
+  open,
+  onClose,
+  onDeleted,
+}: {
+  lead: LeadDetail;
+  open: boolean;
+  onClose: () => void;
+  onDeleted: (message: string) => void;
+}) {
+  // Permanent deletion is deliberately a second, explicit opt-in inside this
+  // dialog rather than a separate button next to Archive: the two sit one
+  // click apart and only one of them is recoverable, so the irreversible one
+  // has to be chosen, not merely aimed at.
+  const [permanent, setPermanent] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setPermanent(false);
+    setError(null);
+  }, [open]);
+
+  async function confirm() {
+    if (!lead.id) return;
+    setWorking(true);
+    setError(null);
+    try {
+      const res = await leadsApi.remove(lead.id, permanent);
+      onDeleted(res.message);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Failed to delete this lead");
+      setWorking(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={permanent ? "Delete permanently?" : "Archive this lead?"}
+      footer={
+        <>
+          <Button variant="outline" className="flex-1" onClick={onClose} disabled={working}>
+            Cancel
+          </Button>
+          <Button
+            className={cn("flex-1", permanent && "bg-red-600 hover:bg-red-700")}
+            onClick={confirm}
+            disabled={working}
+          >
+            {working ? "Working…" : permanent ? "Delete permanently" : "Archive lead"}
+          </Button>
+        </>
+      }
+    >
+      {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
+      <p>
+        <span className="font-semibold text-slate-900">{lead.name}</span>{" "}
+        {permanent ? (
+          <>will be removed for good, along with its pipeline history and any pending follow-ups. This cannot be undone.</>
+        ) : (
+          <>
+            will be removed from the pipeline and from its telecaller&apos;s list. You can restore it
+            from Archived Leads at the stage it left.
+          </>
+        )}
+      </p>
+      {/* Stated in both modes: a founder who assumes "delete" wipes the
+          recordings would otherwise believe it had. */}
+      <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        Call recordings, transcripts and AI analysis for this contact are kept either way — they are
+        your record of calls that actually happened, and they feed telecaller performance.
+      </p>
+      <label className="mt-4 flex items-start gap-2 text-xs text-slate-600">
+        <input
+          type="checkbox"
+          checked={permanent}
+          onChange={(e) => setPermanent(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span>Delete permanently instead of archiving. This cannot be undone.</span>
+      </label>
     </Modal>
   );
 }
@@ -192,6 +286,10 @@ function LeadDetailContent() {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  // Set once the lead is gone, so the page stops showing a record that no
+  // longer exists instead of re-fetching it into a 404.
+  const [removed, setRemoved] = useState<string | null>(null);
   const [zombieDays, setZombieDays] = useState(DEFAULT_ZOMBIE_DAYS);
 
   function load() {
@@ -240,6 +338,30 @@ function LeadDetailContent() {
       </Link>
     </div>
   );
+
+  if (removed) {
+    return (
+      <div className="pb-10">
+        {backLink}
+        <div className="mt-4 px-4 sm:px-6 lg:px-8">
+          <Card className="p-6">
+            <h1 className="text-base font-semibold text-slate-900">Lead removed</h1>
+            <p className="mt-1 text-sm text-slate-600">{removed}</p>
+            <div className="mt-4 flex gap-2">
+              <Link href="/dashboard/leads">
+                <Button size="sm">Go to All Leads</Button>
+              </Link>
+              <Link href="/dashboard/leads/archived">
+                <Button variant="outline" size="sm">
+                  Archived Leads
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (!id || notFound) {
     return (
@@ -338,12 +460,31 @@ function LeadDetailContent() {
                   >
                     <Pencil className="size-3.5" /> Edit Lead
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-red-200 text-red-700 hover:bg-red-50"
+                    onClick={() => setDeleting(true)}
+                    disabled={!lead.id}
+                    title={lead.id ? undefined : "This contact doesn't have a lead record to delete"}
+                  >
+                    <Trash2 className="size-3.5" /> Delete
+                  </Button>
                 </div>
               </div>
             </Card>
           </div>
 
           <EditLeadModal lead={lead} open={editing} onClose={() => setEditing(false)} onSaved={load} />
+          <DeleteLeadModal
+            lead={lead}
+            open={deleting}
+            onClose={() => setDeleting(false)}
+            onDeleted={(message) => {
+              setDeleting(false);
+              setRemoved(message);
+            }}
+          />
 
           <div className="mt-4 grid grid-cols-1 gap-4 px-4 sm:px-6 lg:px-8 lg:grid-cols-3">
             <Card className="p-5 lg:col-span-2">
@@ -368,6 +509,18 @@ function LeadDetailContent() {
                 <div>
                   <dt className="text-xs text-slate-600">Created</dt>
                   <dd className="mt-0.5 text-slate-800">{fmtDateTime(lead.created_at)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-600">Added By</dt>
+                  {/* Distinct from Owner above: a founder can add a lead and
+                      hand it to a telecaller, and both facts matter. Leads
+                      predating this audit trail say so instead of guessing. */}
+                  <dd className="mt-0.5 text-slate-800">
+                    {lead.created_by_name ?? <span className="text-slate-500">Not recorded</span>}
+                    {lead.created_by_name && lead.created_by_role && (
+                      <span className="ml-1 text-xs text-slate-500">({lead.created_by_role})</span>
+                    )}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-xs text-slate-600">Calls So Far</dt>

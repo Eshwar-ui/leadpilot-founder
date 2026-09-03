@@ -264,6 +264,26 @@ export type BoardLead = {
   deal_value: number | null;
   telecaller_name: string | null;
   days_stuck: number;
+  // Who ADDED this lead, as opposed to who owns it — the two differ whenever
+  // a founder adds a lead and assigns it out. Null for leads created before
+  // provenance was tracked; the UI says "Not recorded" rather than guessing.
+  created_by_name: string | null;
+  created_by_role: string | null;
+  created_at: string | null;
+};
+
+export type ArchivedLead = {
+  id: string;
+  display_id: string;
+  name: string;
+  phone: string | null;
+  source: string | null;
+  pipeline_stage: string;
+  deal_value: number | null;
+  telecaller_name: string | null;
+  created_by_name: string | null;
+  deleted_by_name: string | null;
+  deleted_at: string | null;
 };
 
 export type LeadsBoard = {
@@ -305,8 +325,13 @@ export type LeadDetail = {
   deal_value: number | null;
   score: number | null;
   telecaller_name: string | null;
+  // The owner's id, so the Edit modal can preselect the current telecaller
+  // instead of offering a "(keep current)" placeholder.
+  assigned_to: string | null;
   days_stuck: number;
   created_at: string | null;
+  created_by_name: string | null;
+  created_by_role: string | null;
   touchpoints: Touchpoint[];
   score_history: ScoreHistoryPoint[];
   memory: MemoryBubble | null;
@@ -339,14 +364,53 @@ export const leadsApi = {
       }
     );
   },
-  createLead(input: { name: string; phone?: string; reason?: string }) {
-    return authedRequest<{ contact_key: string; name: string; status: string; display_id: string; created: boolean }>(
-      "/api/leads",
-      {
-        method: "POST",
-        body: JSON.stringify(input),
-      }
-    );
+  // phone is REQUIRED: it is the lead's identity, the only thing the
+  // duplicate rule can key on, and the only thing a later recording can
+  // attach to. The backend rejects a create without it.
+  createLead(input: {
+    name: string;
+    phone: string;
+    reason?: string;
+    source?: string;
+    assigned_to?: string;
+  }) {
+    return authedRequest<{
+      contact_key: string;
+      name: string;
+      status: string;
+      display_id: string;
+      created: boolean;
+      // True when the number matched an ARCHIVED lead, which is revived in
+      // place rather than duplicated — worth telling the founder, since the
+      // lead comes back carrying its old call history.
+      restored: boolean;
+    }>("/api/leads", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+  archived() {
+    return authedRequest<{ leads: ArchivedLead[] }>("/api/leads/archived");
+  },
+  // Archive by default; permanent === true physically deletes the row. Call
+  // recordings and AI analysis survive either way — they belong to the call
+  // history, not the pipeline entry.
+  remove(leadId: string, permanent = false) {
+    return authedRequest<{
+      id: string;
+      deleted: boolean;
+      permanent: boolean;
+      message: string;
+    }>(`/api/leads/${leadId}${permanent ? "?permanent=true" : ""}`, { method: "DELETE" });
+  },
+  restore(leadId: string) {
+    return authedRequest<{
+      id: string;
+      restored: boolean;
+      pipeline_stage?: string;
+      assigned_to?: string | null;
+      message: string;
+    }>(`/api/leads/${leadId}/restore`, { method: "POST" });
   },
   updateDetails(
     leadId: string,

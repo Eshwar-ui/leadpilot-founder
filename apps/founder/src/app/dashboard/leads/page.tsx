@@ -3,12 +3,13 @@
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Download } from "lucide-react";
+import { Search, Download, Plus, Archive } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { CopyableId } from "@/components/ui/CopyableId";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
+import { AddLeadModal } from "@/components/leads/AddLeadModal";
 import { ApiError, leadsApi, type BoardLead } from "@/lib/api";
 import { cn, formatINR } from "@/lib/utils";
 
@@ -54,6 +55,8 @@ export default function AllLeadsPage() {
   const [stage, setStage] = useState(ALL);
   const [owner, setOwner] = useState(ALL_OWNERS);
   const [source, setSource] = useState(ALL_SOURCES);
+  const [adding, setAdding] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   function load() {
     setLoading(true);
@@ -90,7 +93,9 @@ export default function AllLeadsPage() {
     const q = query.trim().toLowerCase();
     if (q) {
       out = out.filter((l) =>
-        `${l.display_id} ${l.name} ${l.phone ?? ""} ${l.reason ?? ""}`.toLowerCase().includes(q)
+        `${l.display_id} ${l.name} ${l.phone ?? ""} ${l.reason ?? ""} ${l.created_by_name ?? ""}`
+          .toLowerCase()
+          .includes(q)
       );
     }
     return out;
@@ -106,10 +111,22 @@ export default function AllLeadsPage() {
   }
 
   function exportCsv() {
-    const header = ["Lead ID", "Name", "Phone", "Source", "Stage", "Score", "Value", "Owner", "Last Update"];
+    const header = ["Lead ID", "Name", "Phone", "Source", "Stage", "Score", "Value", "Owner", "Added By", "Added On", "Last Update"];
     const escape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
     const rows = visible.map((l) =>
-      [l.display_id, l.name, l.phone ?? "", l.source ?? "", l.pipeline_stage, l.score ?? "", l.deal_value ?? "", l.telecaller_name ?? "", `${l.days_stuck}d`]
+      [
+        l.display_id,
+        l.name,
+        l.phone ?? "",
+        l.source ?? "",
+        l.pipeline_stage,
+        l.score ?? "",
+        l.deal_value ?? "",
+        l.telecaller_name ?? "",
+        l.created_by_name ?? "",
+        l.created_at ? new Date(l.created_at).toLocaleDateString() : "",
+        `${l.days_stuck}d`,
+      ]
         .map((c) => escape(String(c)))
         .join(",")
     );
@@ -129,6 +146,11 @@ export default function AllLeadsPage() {
         description={leads ? `${leads.length} leads in the pipeline` : undefined}
         action={
           <>
+            <Link href="/dashboard/leads/archived">
+              <Button variant="outline" size="sm">
+                <Archive className="size-3.5" /> Archive
+              </Button>
+            </Link>
             <Link href="/dashboard/leads/quality">
               <Button variant="outline" size="sm">
                 Lead Quality
@@ -137,9 +159,33 @@ export default function AllLeadsPage() {
             <Button variant="outline" size="sm" onClick={exportCsv}>
               <Download className="size-3.5" /> Export
             </Button>
+            <Button size="sm" onClick={() => setAdding(true)}>
+              <Plus className="size-3.5" /> Add Lead
+            </Button>
           </>
         }
       />
+
+      <AddLeadModal
+        open={adding}
+        onClose={() => setAdding(false)}
+        onCreated={(message) => {
+          setNotice(message);
+          load();
+        }}
+      />
+
+      {notice && (
+        <div
+          role="status"
+          className="mt-4 mx-4 sm:mx-6 lg:mx-8 flex items-start justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+        >
+          <span>{notice}</span>
+          <button className="font-semibold underline" onClick={() => setNotice(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div className="mt-4 flex flex-col gap-3 px-4 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center gap-3">
@@ -148,8 +194,8 @@ export default function AllLeadsPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search ID, name, phone, or enquiry"
-              aria-label="Search leads by ID, name, phone, or enquiry"
+              placeholder="Search ID, name, phone, enquiry, or who added it"
+              aria-label="Search leads by ID, name, phone, enquiry, or who added it"
               className="w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
             />
           </div>

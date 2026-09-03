@@ -33,6 +33,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const [notifications, setNotifications] = useState<FounderNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -164,6 +165,23 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
     // "can't reach server" banner.
     markReachable();
     router.push("/login");
+  }
+
+  async function markAllRead() {
+    if (!unreadCount || markingAllRead) return;
+    setMarkingAllRead(true);
+    try {
+      await notificationsApi.markAllRead();
+      const now = new Date().toISOString();
+      setNotifications((current) => current.map((item) => item.read_at ? item : { ...item, read_at: now }));
+      setUnreadCount(0);
+    } catch {
+      // Nothing to surface inline here — the dropdown has no room for an
+      // error strip. The count staying nonzero is itself the signal that
+      // it didn't work, and reopening the dropdown will retry the fetch.
+    } finally {
+      setMarkingAllRead(false);
+    }
   }
 
   function openNotification(notification: FounderNotification) {
@@ -321,6 +339,15 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
                     </span>
                   )}
                 </div>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllRead}
+                    disabled={markingAllRead}
+                    className="text-xs font-semibold text-primary-600 transition-opacity hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {markingAllRead ? "Updating…" : "Mark all read"}
+                  </button>
+                )}
               </div>
               {notifications.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">

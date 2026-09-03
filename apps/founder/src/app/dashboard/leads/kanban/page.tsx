@@ -8,6 +8,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { SkeletonKanbanColumn, SkeletonStatCard } from "@/components/ui/Skeleton";
+import { AddLeadModal } from "@/components/leads/AddLeadModal";
 import { ApiError, leadsApi, type BoardLead } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Clock, AlertTriangle } from "lucide-react";
@@ -51,12 +52,7 @@ export default function KanbanBoardPage() {
   const [dealValueInput, setDealValueInput] = useState("");
   const [moveNoteInput, setMoveNoteInput] = useState("");
   const [addingLead, setAddingLead] = useState(false);
-  const [newLeadName, setNewLeadName] = useState("");
-  const [newLeadPhone, setNewLeadPhone] = useState("");
-  const [newLeadReason, setNewLeadReason] = useState("");
-  const [createError, setCreateError] = useState<string | null>(null);
   const [createNotice, setCreateNotice] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
   const [telecallerFilter, setTelecallerFilter] = useState("all");
   const [moveError, setMoveError] = useState<string | null>(null);
 
@@ -127,50 +123,6 @@ export default function KanbanBoardPage() {
       backward ? note : undefined
     );
     setPendingMove(null);
-  }
-
-  function openAddLead() {
-    setNewLeadName("");
-    setNewLeadPhone("");
-    setNewLeadReason("");
-    setCreateError(null);
-    setCreateNotice(null);
-    setAddingLead(true);
-  }
-
-  async function submitAddLead() {
-    const name = newLeadName.trim();
-    if (!name) {
-      setCreateError("Name is required");
-      return;
-    }
-    setCreating(true);
-    setCreateError(null);
-    setCreateNotice(null);
-    try {
-      const res = await leadsApi.createLead({
-        name,
-        phone: newLeadPhone.trim() || undefined,
-        reason: newLeadReason.trim() || undefined,
-      });
-      setAddingLead(false);
-      // POST /api/leads is idempotent on contact_key (phone, else name slug):
-      // a match MERGES the phone/reason onto the existing row and KEEPS its old
-      // name, returning created: false. Reporting that as a plain success let
-      // the founder believe they'd added a new lead when they had quietly
-      // edited a different one — under a name they never typed.
-      setCreateNotice(
-        res.created
-          ? `Added "${res.name}".`
-          : `"${name}" already exists as "${res.name}" — no new lead was created. ` +
-            `The phone and enquiry you entered were merged into that lead instead.`
-      );
-      load();
-    } catch (e) {
-      setCreateError(e instanceof ApiError ? e.message : "Failed to create lead");
-    } finally {
-      setCreating(false);
-    }
   }
 
   const telecallerNames = useMemo(
@@ -255,7 +207,7 @@ export default function KanbanBoardPage() {
             <Button variant="outline" size="sm" onClick={exportCsv} disabled={visibleLeads.length === 0}>
               <Download className="size-3.5" /> Export
             </Button>
-            <Button size="sm" onClick={openAddLead}>
+            <Button size="sm" onClick={() => setAddingLead(true)}>
               <Plus className="size-3.5" /> Add Lead
             </Button>
           </div>
@@ -528,59 +480,14 @@ export default function KanbanBoardPage() {
         </div>
       </Modal>
 
-      <Modal
+      <AddLeadModal
         open={addingLead}
         onClose={() => setAddingLead(false)}
-        title="Add Lead"
-        footer={
-          <>
-            <Button variant="outline" size="sm" onClick={() => setAddingLead(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={submitAddLead} disabled={creating}>
-              {creating ? "Adding…" : "Add Lead"}
-            </Button>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-3">
-          {createError && (
-            <p className="rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">{createError}</p>
-          )}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Name</label>
-            <input
-              autoFocus
-              type="text"
-              placeholder="e.g. Priya Sharma"
-              value={newLeadName}
-              onChange={(e) => setNewLeadName(e.target.value)}
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Phone</label>
-            <input
-              type="tel"
-              placeholder="e.g. 9876543210"
-              value={newLeadPhone}
-              onChange={(e) => setNewLeadPhone(e.target.value)}
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Reason</label>
-            <input
-              type="text"
-              placeholder="e.g. Interested in premium plan"
-              value={newLeadReason}
-              onChange={(e) => setNewLeadReason(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && submitAddLead()}
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
-      </Modal>
+        onCreated={(message) => {
+          setCreateNotice(message);
+          load();
+        }}
+      />
     </div>
   );
 }
