@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { SkeletonTableRow } from "@/components/ui/Skeleton";
 import { AddTelecallerModal, ROLES, ROLE_LABEL } from "@/components/team/TeamMemberModals";
-import { ApiError, teamApi, type TeamMember } from "@/lib/api";
+import { ApiError, orgApi, teamApi, type TeamMember } from "@/lib/api";
 import { getStoredUser } from "@/lib/auth";
 import { cn, initials } from "@/lib/utils";
 
@@ -36,6 +36,39 @@ export default function UserManagementPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [deactivating, setDeactivating] = useState<TeamMember | null>(null);
+
+  // Whether telecallers are scoped to only their own leads (Organization.
+  // strict_lead_scoping). null while unloaded — the toggle disables itself
+  // until it knows the real value, so a stray click can't flip it blind.
+  const [scoping, setScoping] = useState<boolean | null>(null);
+  const [scopingLoadError, setScopingLoadError] = useState<string | null>(null);
+  const [scopingSaving, setScopingSaving] = useState(false);
+  const [scopingError, setScopingError] = useState<string | null>(null);
+
+  function loadScoping() {
+    setScopingLoadError(null);
+    orgApi
+      .get()
+      .then((p) => setScoping(p.strict_lead_scoping))
+      .catch((e) => setScopingLoadError(e instanceof ApiError ? e.message : "Failed to load setting"));
+  }
+
+  useEffect(loadScoping, []);
+
+  async function toggleScoping() {
+    if (scoping === null || scopingSaving) return;
+    const next = !scoping;
+    setScopingSaving(true);
+    setScopingError(null);
+    try {
+      const updated = await orgApi.update({ strict_lead_scoping: next });
+      setScoping(updated.strict_lead_scoping);
+    } catch (e) {
+      setScopingError(e instanceof ApiError ? e.message : "Failed to update setting");
+    } finally {
+      setScopingSaving(false);
+    }
+  }
 
   function load() {
     setLoading(true);
@@ -150,6 +183,46 @@ export default function UserManagementPage() {
           </button>
         </div>
       )}
+
+      <div className="mt-4 px-4 sm:px-6 lg:px-8">
+        <Card className="flex items-start justify-between gap-4 p-4">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-900">Telecallers only see their own leads</p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              When on, each telecaller&apos;s inbox and lead detail screens show only leads assigned to them —
+              not every telecaller&apos;s leads. Founders and admins keep full visibility here regardless.
+            </p>
+            {scopingLoadError && (
+              <p className="mt-1.5 text-xs font-medium text-red-600">
+                {scopingLoadError} —{" "}
+                <button className="underline" onClick={loadScoping}>
+                  Retry
+                </button>
+              </p>
+            )}
+            {scopingError && <p className="mt-1.5 text-xs font-medium text-red-600">{scopingError}</p>}
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={scoping ?? false}
+            aria-label="Restrict telecallers to their own leads"
+            disabled={scoping === null || scopingSaving}
+            onClick={toggleScoping}
+            className={cn(
+              "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+              scoping ? "bg-primary-600" : "bg-slate-200"
+            )}
+          >
+            <span
+              className={cn(
+                "inline-block size-4 transform rounded-full bg-white shadow transition-transform",
+                scoping ? "translate-x-6" : "translate-x-1"
+              )}
+            />
+          </button>
+        </Card>
+      </div>
 
       <div className="mt-4 flex flex-wrap gap-1.5 px-4 sm:px-6 lg:px-8">
         {["All", ...ROLES].map((r) => (

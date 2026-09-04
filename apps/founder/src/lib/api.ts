@@ -185,6 +185,7 @@ export type OrgProfile = {
   logo_url: string | null;
   address: string | null;
   alert_config: AlertConfig | null;
+  strict_lead_scoping: boolean;
 };
 
 export type OrgProfileInput = Partial<Omit<OrgProfile, "id" | "slug">>;
