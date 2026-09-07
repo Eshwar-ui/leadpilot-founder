@@ -165,6 +165,8 @@ export type AlertConfig = {
   quality_floor: number | null;
   break_threshold_min: number | null;
   inactive_threshold_min: number | null;
+  /** Days without a visit before a client is due for recall. */
+  recall_days: number | null;
 };
 
 export type OrgProfile = {
@@ -230,7 +232,13 @@ export const teamApi = {
       body: JSON.stringify(input),
     });
   },
-  update(userId: string, input: { role?: string; is_active?: boolean }) {
+  // Every field is optional and only sent when present — a PATCH that just
+  // flips is_active must not blank out the member's phone. Passing phone: ""
+  // is the deliberate exception: it clears the stored number.
+  update(
+    userId: string,
+    input: { role?: string; is_active?: boolean; name?: string; email?: string; phone?: string }
+  ) {
     return authedRequest<TeamMember>(`/api/team/${userId}`, {
       method: "PATCH",
       body: JSON.stringify(input),
@@ -264,12 +272,29 @@ export type BoardLead = {
   pipeline_stage: string;
   deal_value: number | null;
   telecaller_name: string | null;
+  /** The owner's user id, alongside their name — so a screen can book work
+   *  into their queue rather than only display who they are. */
+  assigned_to: string | null;
   days_stuck: number;
   // Who ADDED this lead, as opposed to who owns it — the two differ whenever
   // a founder adds a lead and assigns it out. Null for leads created before
   // provenance was tracked; the UI says "Not recorded" rather than guessing.
   created_by_name: string | null;
   created_by_role: string | null;
+  // Customer status — derived from Lead.client_since on the backend, and
+  // deliberately independent of pipeline_stage: a reopened deal is still a
+  // client. See the column comment in models.py for why this isn't a stage.
+  is_client: boolean;
+  client_since: string | null;
+  /** Summed from logged visits — real money received. 0 for a client with no
+   *  visits recorded yet, which is a real, actionable state (someone forgot to
+   *  log them), not missing data. */
+  lifetime_value: number;
+  last_visit_at: string | null;
+  /** Computed server-side so the rule and its threshold live in ONE place.
+   *  False for a client with no visits logged — that's a record-keeping gap,
+   *  not a customer who stopped coming. */
+  recall_due: boolean;
   created_at: string | null;
 };
 
@@ -290,6 +315,9 @@ export type ArchivedLead = {
 export type LeadsBoard = {
   stages: string[];
   leads: BoardLead[];
+  /** The org's recall window, so screens can explain the rule behind
+   *  `recall_due` rather than restating a number that could drift from it. */
+  recall_days: number;
 };
 
 export type Touchpoint = {
@@ -300,6 +328,15 @@ export type Touchpoint = {
   summary: string | null;
   // Real per-call sentiment — the same field the mobile app's history shows.
   sentiment: string | null;
+  /** "completed" | "not_relevant". A not-relevant call (wrong number, no real
+   *  conversation) still belongs in the thread — it happened — but the AI
+   *  explicitly does NOT stand behind its score, so the UI hides the number
+   *  rather than presenting it as a verdict on the lead. */
+  analysis_status: string | null;
+  /** Why the analyser called it not relevant, when it did. */
+  relevance_reason: string | null;
+  has_audio: boolean;
+  duration_label: string | null;
 };
 
 export type ScoreHistoryPoint = { timestamp: string | null; score: number };
@@ -311,6 +348,29 @@ export type ScoreHistoryPoint = { timestamp: string | null; score: number };
 export type LeadFollowUp = { note: string | null; due_at: string | null };
 
 export type DuplicateLead = { id: string; name: string; pipeline_stage: string };
+
+/** The newest analysed call for a lead, returned inline with lead detail so
+ *  the Latest Call section renders without extra round-trips. */
+export type LatestCall = {
+  call_id: string;
+  timestamp: string | null;
+  // Whether a recording actually exists. The player is only rendered when
+  // this is true — otherwise we'd offer playback that 404s.
+  has_audio: boolean;
+  // "MM:SS", derived from the last transcript turn (there is no duration
+  // column), so it can be absent for a call with no transcript.
+  duration_label: string | null;
+  capture_source: string | null;
+  score: number | null;
+  lead_verdict: string | null;
+  sentiment_label: string | null;
+  bant_breakdown: Record<string, { score?: number; reason?: string }> | null;
+  entities: Record<string, unknown> | null;
+  call_summary: CallSummary | null;
+  headline: string | null;
+  key_points: string[];
+  next_steps: { step?: number; text?: string; action_type?: string; action_label?: string }[];
+};
 
 export type LeadDetail = {
   // NULLABLE: a contact with calls but no Lead row returns id: null and
@@ -333,11 +393,318 @@ export type LeadDetail = {
   created_at: string | null;
   created_by_name: string | null;
   created_by_role: string | null;
+  is_client: boolean;
+  client_since: string | null;
+  /** Services + visit history. Null for a lead who isn't a client, so the
+   *  Client tab simply doesn't exist for them. */
+  client: ClientRecord | null;
   touchpoints: Touchpoint[];
+  // null when the lead has no analysed call yet — the section is omitted
+  // rather than rendered empty.
+  latest_call: LatestCall | null;
   score_history: ScoreHistoryPoint[];
   memory: MemoryBubble | null;
   follow_up: LeadFollowUp | null;
   duplicates: DuplicateLead[];
+};
+
+/** What PATCH /api/leads/{id}/details returns — deliberately a subset of
+ *  LeadDetail. Kept as its own type so it can never be mistaken for one. */
+export type LeadDetailsPatch = {
+  id: string;
+  name: string;
+  phone: string | null;
+  reason: string | null;
+  source: string | null;
+  pipeline_stage: string | null;
+  deal_value: number | null;
+  telecaller_name: string | null;
+  is_client: boolean;
+  client_since: string | null;
+  /** Summed from logged visits. 0 for a client with no visits recorded yet —
+   *  which is a real, actionable state, not missing data. */
+  lifetime_value: number;
+  last_visit_at: string | null;
+};
+
+
+// ─── Bulk lead import ────────────────────────────────────────────────────────
+
+export type ImportParseResult = {
+  columns: string[];
+  rows: Record<string, string>[];
+  row_count: number;
+  // Which column the server thinks holds each field. Null where it couldn't
+  // tell — the mapping step makes the founder choose.
+  suggested_mapping: Record<ImportField, string | null>;
+  // True when the file had MORE rows than the server will take. Surfaced, not
+  // swallowed: an import that quietly stops partway is how half a list goes
+  // missing without anyone noticing.
+  truncated: boolean;
+  max_rows: number;
+};
+
+export type ImportField = "name" | "phone" | "source" | "reason";
+
+export type ImportRowStatus = "ok" | "duplicate" | "invalid";
+
+export type ImportValidatedRow = {
+  index: number;
+  status: ImportRowStatus;
+  errors: string[];
+  duplicate_of?: string | null;
+  name: string;
+  phone: string;
+  source: string;
+  reason: string;
+};
+
+export type ImportValidateResult = {
+  rows: ImportValidatedRow[];
+  summary: { ok: number; duplicate: number; invalid: number };
+};
+
+export type ImportCommitResult = {
+  created: number;
+  // An archived lead for that number was revived in place rather than
+  // duplicated, keeping its existing call history attached.
+  restored: number;
+  skipped: number;
+  failed: { index: number; name?: string; phone?: string; reason: string }[];
+  notified: number;
+};
+
+export const leadImportApi = {
+  // Multipart, so this bypasses authedRequest's JSON Content-Type — the
+  // browser must set the multipart boundary itself.
+  async parse(file: File): Promise<ImportParseResult> {
+    const token = getToken();
+    if (!token) throw new ApiError(401, "Not signed in");
+    const form = new FormData();
+    form.append("file", file);
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}/api/leads/import/parse`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+    } catch {
+      throw new ApiError(0, "Can't reach the server. Check your connection and try again.");
+    }
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null);
+      throw new ApiError(res.status, detail?.detail ?? "Couldn't read that file.");
+    }
+    return res.json();
+  },
+  validate(rows: Record<string, string>[], mapping: Record<string, string | null>) {
+    return authedRequest<ImportValidateResult>("/api/leads/import/validate", {
+      method: "POST",
+      body: JSON.stringify({ rows, mapping }),
+    });
+  },
+  commit(
+    rows: { name: string; phone: string; source?: string; reason?: string; assigned_to?: string }[],
+    assignedTo?: string
+  ) {
+    return authedRequest<ImportCommitResult>("/api/leads/import/commit", {
+      method: "POST",
+      body: JSON.stringify({ rows, ...(assignedTo ? { assigned_to: assignedTo } : {}) }),
+    });
+  },
+  telecallers() {
+    return authedRequest<{
+      telecallers: { id: string; name: string }[];
+      default_owner_id: string | null;
+    }>("/api/leads/import/telecallers");
+  },
+};
+
+
+// ─── Client records (services + visits) ──────────────────────────────────────
+
+export type OrgService = {
+  id: string;
+  name: string;
+  /** The usual price. Overridable per visit — clinics discount and bundle
+   *  constantly, so this is a default, never what someone actually paid. */
+  default_price: number | null;
+  category: string | null;
+  /** Retired services stay on past visits but drop out of the picker. */
+  is_active: boolean;
+};
+
+export type ClientPackage = {
+  id: string;
+  service_id: string | null;
+  service_name: string;
+  total_sessions: number;
+  /** Derived from the visit line items pointing at this package, never stored
+   *  — so deleting a visit hands the session back automatically. */
+  sessions_used: number;
+  sessions_remaining: number;
+  is_exhausted: boolean;
+  /** Charged ONCE, at purchase. Sessions drawn from it carry no price, so a
+   *  6-session package counts once in lifetime value rather than six times. */
+  amount: number | null;
+  purchased_at: string | null;
+  notes: string | null;
+};
+
+export type VisitService = {
+  id: string;
+  service_id: string | null;
+  /** Set when this session came out of a prepaid package rather than being
+   *  paid for on the day. */
+  package_id?: string | null;
+  /** A snapshot taken when the visit was logged — renaming the service later
+   *  does not rewrite what past visits say was done. */
+  name: string;
+  price: number | null;
+};
+
+export type ClientVisit = {
+  id: string;
+  visited_at: string | null;
+  amount: number | null;
+  notes: string | null;
+  logged_by: string | null;
+  services: VisitService[];
+};
+
+export type ClientRecord = {
+  visits: ClientVisit[];
+  visit_count: number;
+  packages: ClientPackage[];
+  /** Summed from VISITS — real money received. Deliberately not `deal_value`,
+   *  which is one figure captured at conversion and says nothing about repeat
+   *  business, which is the whole point for a clinic. */
+  lifetime_value: number;
+  first_visit_at: string | null;
+  last_visit_at: string | null;
+};
+
+export type VisitServiceInput = {
+  service_id?: string;
+  name?: string;
+  price?: number | null;
+  /** Draw this session from a prepaid package instead of charging for it. */
+  package_id?: string;
+};
+
+export type VisitInput = {
+  visited_at?: string;
+  amount?: number | null;
+  notes?: string;
+  services?: VisitServiceInput[];
+};
+
+export const servicesApi = {
+  list(includeInactive = false) {
+    return authedRequest<{ services: OrgService[] }>(
+      `/api/services${includeInactive ? "?include_inactive=true" : ""}`
+    );
+  },
+  create(input: { name: string; default_price?: number | null; category?: string }) {
+    return authedRequest<OrgService>("/api/services", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+  update(
+    id: string,
+    input: { name?: string; default_price?: number | null; category?: string; is_active?: boolean }
+  ) {
+    return authedRequest<OrgService>(`/api/services/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  },
+  // Pull the treatments already listed on the Organisation Profile into this
+  // priced list, instead of typing them a second time. Names already present
+  // are skipped, so running it twice is a no-op.
+  importFromProfile() {
+    return authedRequest<{ created: string[]; skipped: string[]; available: number }>(
+      "/api/services/import-from-profile",
+      { method: "POST" }
+    );
+  },
+};
+
+export const visitsApi = {
+  // Every mutation returns the client's WHOLE refreshed record, so the tab's
+  // totals can never drift from its rows.
+  list(leadId: string) {
+    return authedRequest<ClientRecord>(`/api/leads/${leadId}/visits`);
+  },
+  create(leadId: string, input: VisitInput) {
+    return authedRequest<ClientRecord>(`/api/leads/${leadId}/visits`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+  update(visitId: string, input: VisitInput) {
+    return authedRequest<ClientRecord>(`/api/visits/${visitId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  },
+  remove(visitId: string) {
+    return authedRequest<ClientRecord>(`/api/visits/${visitId}`, { method: "DELETE" });
+  },
+};
+
+export type FollowUp = {
+  id: string;
+  lead_id: string | null;
+  telecaller_id: string;
+  note: string | null;
+  due_at: string;
+  completed_at: string | null;
+};
+
+export const followUpsApi = {
+  /** Books a follow-up. `telecaller_id` is the owner's queue it lands in —
+   *  the founder dashboard always sets it, because a task on the founder's own
+   *  list is a task nobody sees in the mobile app. */
+  create(input: { lead_id?: string; telecaller_id?: string; note?: string; due_at: string }) {
+    return authedRequest<FollowUp>("/api/follow-ups", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+};
+
+export const packagesApi = {
+  create(
+    leadId: string,
+    input: {
+      service_id?: string;
+      service_name?: string;
+      total_sessions: number;
+      amount?: number | null;
+      purchased_at?: string;
+      notes?: string;
+    }
+  ) {
+    return authedRequest<ClientRecord>(`/api/leads/${leadId}/packages`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+  update(
+    packageId: string,
+    input: { total_sessions?: number; amount?: number | null; purchased_at?: string; notes?: string }
+  ) {
+    return authedRequest<ClientRecord>(`/api/packages/${packageId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  },
+  remove(packageId: string) {
+    return authedRequest<ClientRecord>(`/api/packages/${packageId}`, { method: "DELETE" });
+  },
 };
 
 export const leadsApi = {
@@ -346,6 +713,26 @@ export const leadsApi = {
   },
   detail(leadId: string) {
     return authedRequest<LeadDetail>(`/api/leads/${leadId}`);
+  },
+  // Mark/unmark a lead as a customer. Goes through the lead-details endpoint
+  // (not the stage endpoint) because customer status is deliberately NOT a
+  // pipeline stage — see Lead.client_since.
+  //
+  // Returns a SUBSET of LeadDetail, not the whole thing: /details has no
+  // touchpoints, memory or latest_call. Callers must MERGE this into the lead
+  // they already hold — assigning it wholesale strips those fields and blows
+  // up the first render that reads `touchpoints.length`.
+  // Marking a client also moves the lead to Closed Won (the backend does it
+  // through the normal stage path so revenue stays consistent), which is why
+  // the UI confirms first and offers an optional deal value.
+  setClient(leadId: string, isClient: boolean, dealValue?: number | null) {
+    return authedRequest<LeadDetailsPatch>(`/api/leads/${leadId}/details`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        is_client: isClient,
+        ...(isClient && dealValue != null ? { deal_value: dealValue } : {}),
+      }),
+    });
   },
   updateStage(leadId: string, stage: string, dealValue?: number, note?: string) {
     const body: Record<string, unknown> = { stage };
@@ -481,10 +868,29 @@ export type TelecallerCallSummary = {
   total_score: number | null;
 };
 
-export type TelecallerTimelineEntry = {
+/** One call as every list on the Telecaller Detail page renders it.
+ *
+ *  Call Log / Best Calls / Needs Review and the paginated call-log page all
+ *  use this ONE shape (the backend has a test pinning them together), so a
+ *  call can't describe itself differently depending on which tab you found it
+ *  in. */
+export type TelecallerCallRow = {
   call_id: string;
   timestamp: string | null;
+  /** "MM:SS", derived from the last transcript turn — absent when a call has
+   *  no transcript. */
+  duration_label: string | null;
+  /** Null when the call landed before a Lead row existed; `lead_name` then
+   *  falls back to the contact key. */
+  lead_id: string | null;
+  lead_name: string;
+  phone: string | null;
   lead_verdict: string | null;
+  /** The telecaller's handling score for this call, not the lead's quality.
+   *  Null while the call is unanalysed. */
+  total_score: number | null;
+  has_audio: boolean;
+  capture_source: string | null;
 };
 
 export type DailyCallCount = { date: string; count: number };
@@ -494,24 +900,29 @@ export type AssignedLead = {
   name: string;
   pipeline_stage: string;
   deal_value: number | null;
+  phone: string | null;
+  source: string | null;
+  reason: string | null;
+  created_at: string | null;
+  /** Days since anything last changed on the lead. */
+  days_stuck: number;
+  /** The most recent call with this lead, or null when nobody has called yet
+   *  — which is the actionable state, so it's rendered rather than hidden. */
+  last_call: TelecallerCallRow | null;
 };
 
 export type TelecallerPerformanceDetail = TelecallerPerformance & {
   status: TeamHealthStatus;
   idle_minutes: number | null;
-  best_calls: TelecallerCallSummary[];
-  needs_review: TelecallerCallSummary[];
-  timeline: TelecallerTimelineEntry[];
+  best_calls: TelecallerCallRow[];
+  needs_review: TelecallerCallRow[];
+  timeline: TelecallerCallRow[];
   daily_calls: DailyCallCount[];
   leads_assigned: AssignedLead[];
 };
 
-export type TelecallerCallLogEntry = {
-  call_id: string;
-  timestamp: string | null;
-  lead_verdict: string | null;
-  total_score: number | null;
-};
+/** The paginated call-log page uses the same row as the detail page's tabs. */
+export type TelecallerCallLogEntry = TelecallerCallRow;
 
 export type TelecallerCallLogResponse = {
   calls: TelecallerCallLogEntry[];

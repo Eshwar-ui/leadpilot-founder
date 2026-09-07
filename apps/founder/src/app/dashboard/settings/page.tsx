@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import Link from "next/link";
-import { Users, Bell, Building2, KeyRound } from "lucide-react";
+import { Bell, Building2, KeyRound, Sparkles, Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -32,6 +32,12 @@ const CARDS = [
     title: "Organisation Profile",
     description: "The knowledge base every AI feature reads from.",
     href: "/dashboard/settings/org",
+  },
+  {
+    icon: Sparkles,
+    title: "Services",
+    description: "The treatments you offer, used when logging a client's visit.",
+    href: "/dashboard/settings/services",
   },
 ];
 

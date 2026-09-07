@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, ArrowLeft, Check, Play, Pause, RotateCw, Square, Languages, User } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, RotateCw, Languages, User } from "lucide-react";
+import { CallAudioPlayer } from "@/components/calls/CallAudioPlayer";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -44,13 +45,6 @@ const SPEAKER_LABEL: Record<string, string> = { AGENT: "Telecaller", USER: "Lead
 
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-}
-
-function fmtTime(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 /** "+4 vs last call" / "−3 vs last call" — `trend` is a POINT DELTA against
@@ -242,19 +236,6 @@ function CallAnalysisContent() {
   const [alreadyEnglish, setAlreadyEnglish] = useState(false);
   const [translateError, setTranslateError] = useState<string | null>(null);
 
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [playing, setPlaying] = useState(false);
-  // The Audio object is an imperative handle, not render data — a ref (not
-  // state) so seeking/stopping can mutate it directly without tripping the
-  // "don't mutate useState values" lint rule.
-  const audioElRef = useRef<HTMLAudioElement | null>(null);
-  const [audioReady, setAudioReady] = useState(false);
-  const [audioError, setAudioError] = useState<{ message: string; retryable: boolean } | null>(null);
-  const [audioLoading, setAudioLoading] = useState(true);
-  // Bumped by the recording's own Retry button to re-run the fetch effect.
-  const [audioAttempt, setAudioAttempt] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
 
   function load() {
     // No ?id= can never resolve — load() would re-check this and set the same
@@ -350,70 +331,6 @@ function CallAnalysisContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, awaitingAnalysis]);
 
-  // This page re-renders in place when `id` changes (e.g. navigating between
-  // two calls via a Link) rather than remounting, so the audio player state
-  // from the previous call was surviving into the new one — togglePlay()
-  // would find a leftover `audioEl` and just resume playback of the prior
-  // call's recording under the new call's header/transcript. Fetching the
-  // recording eagerly (rather than on first click) also means the scrubber
-  // knows the real duration before playback ever starts.
-  useEffect(() => {
-    audioElRef.current?.pause();
-    audioElRef.current = null;
-    setAudioReady(false);
-    setAudioUrl(null);
-    setPlaying(false);
-    setAudioError(null);
-    setDuration(0);
-    setCurrentTime(0);
-
-    if (!id) return;
-    let cancelled = false;
-    setAudioLoading(true);
-    callsApi
-      .fetchAudioBlob(id)
-      .then((blob) => {
-        if (cancelled) return;
-        const url = URL.createObjectURL(blob);
-        const el = new Audio(url);
-        el.onloadedmetadata = () => setDuration(el.duration);
-        el.ontimeupdate = () => setCurrentTime(el.currentTime);
-        el.onended = () => {
-          setPlaying(false);
-          setCurrentTime(0);
-        };
-        el.onplay = () => setPlaying(true);
-        el.onpause = () => setPlaying(false);
-        setAudioUrl(url);
-        audioElRef.current = el;
-        setAudioReady(true);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        // Every cause used to collapse into "Recording unavailable." — a call
-        // that was simply never recorded read exactly like an unreachable
-        // server, and neither offered a way to try again. Split them, and
-        // offer Retry only where a retry could change the outcome.
-        if (e instanceof ApiError) {
-          if (e.status === 404) setAudioError({ message: "No recording was uploaded for this call.", retryable: false });
-          else if (e.status === 401)
-            setAudioError({ message: "Your session has expired. Sign in again to play this recording.", retryable: false });
-          else if (e.status === 403)
-            setAudioError({ message: "You don't have access to this recording.", retryable: false });
-          else if (e.status >= 500)
-            setAudioError({ message: "The server couldn't return this recording.", retryable: true });
-          else setAudioError({ message: e.message, retryable: true });
-        } else {
-          // fetchAudioBlob uses a bare fetch(), which throws (not rejects with
-          // a status) when the server is unreachable.
-          setAudioError({ message: "Couldn't reach the server to load this recording.", retryable: true });
-        }
-      })
-      .finally(() => !cancelled && setAudioLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [id, audioAttempt]);
 
   async function toggleTranslate() {
     if (translated) {
@@ -444,33 +361,6 @@ function CallAnalysisContent() {
       setTranslating(false);
     }
   }
-
-  function togglePlay() {
-    const el = audioElRef.current;
-    if (!el) return;
-    if (playing) el.pause();
-    else el.play();
-  }
-
-  function handleSeek(e: ChangeEvent<HTMLInputElement>) {
-    const t = Number(e.target.value);
-    if (audioElRef.current) audioElRef.current.currentTime = t;
-    setCurrentTime(t);
-  }
-
-  function handleStop() {
-    const el = audioElRef.current;
-    if (!el) return;
-    el.pause();
-    el.currentTime = 0;
-    setCurrentTime(0);
-  }
-
-  useEffect(() => {
-    return () => {
-      if (audioUrl) URL.revokeObjectURL(audioUrl);
-    };
-  }, [audioUrl]);
 
   const shownTurns = translated && translatedTurns ? translatedTurns : turns;
   // "failed" means the numbers in `score` are the zeroed placeholder the
@@ -589,75 +479,11 @@ function CallAnalysisContent() {
           <div className="mt-4 px-4 sm:px-6 lg:px-8">
             <Card className="p-5">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recording</h3>
-              {audioError ? (
-                <p role="alert" className="mt-3 text-sm font-medium text-red-700">
-                  {audioError.message}
-                  {audioError.retryable && (
-                    <>
-                      {" "}
-                      <button className="font-semibold underline" onClick={() => setAudioAttempt((n) => n + 1)}>
-                        Retry
-                      </button>
-                    </>
-                  )}
-                </p>
-              ) : (
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    onClick={togglePlay}
-                    disabled={!audioReady || audioLoading}
-                    aria-label={playing ? "Pause call recording" : "Play call recording"}
-                    className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 hover:shadow active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {audioLoading ? (
-                      <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    ) : playing ? (
-                      <Pause className="size-4" fill="currentColor" />
-                    ) : (
-                      <Play className="ml-0.5 size-4" fill="currentColor" />
-                    )}
-                  </button>
-
-                  <button
-                    onClick={handleStop}
-                    disabled={!audioReady || (!playing && currentTime === 0)}
-                    aria-label="Stop and rewind recording"
-                    className="flex size-8 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-30"
-                  >
-                    <Square className="size-3.5" fill="currentColor" />
-                  </button>
-
-                  <div className="min-w-0 flex-1 pl-1">
-                    <div className="relative flex h-4 items-center">
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className="h-full rounded-full bg-primary-600 transition-[width] duration-150"
-                          style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
-                        />
-                      </div>
-                      <div
-                        className="pointer-events-none absolute top-1/2 size-3 -translate-y-1/2 rounded-full bg-primary-600 shadow ring-2 ring-white transition-[left] duration-150"
-                        style={{ left: `calc(${duration > 0 ? (currentTime / duration) * 100 : 0}% - 6px)` }}
-                      />
-                      <input
-                        type="range"
-                        min={0}
-                        max={duration || 0}
-                        step={0.1}
-                        value={currentTime}
-                        onChange={handleSeek}
-                        disabled={!duration}
-                        aria-label="Seek recording"
-                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
-                      />
-                    </div>
-                    <div className="mt-1.5 flex items-center justify-between font-mono text-[11px] tabular-nums text-slate-600">
-                      <span>{fmtTime(currentTime)}</span>
-                      <span>{duration ? fmtTime(duration) : audioLoading ? "Loading…" : "0:00"}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <CallAudioPlayer
+                callId={id}
+                className="mt-3"
+                stickyLabel={header?.lead_name ? `${header.lead_name} · call recording` : "Call recording"}
+              />
             </Card>
           </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Download, Plus } from "lucide-react";
+import { BadgeCheck, Download, Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
@@ -324,7 +324,21 @@ export default function KanbanBoardPage() {
                     <div className="flex flex-col gap-2">
                       {stageLeads.map((lead) => (
                         <Card key={lead.id} className={cn("border-t-2 p-3", stageBorder[stage])}>
-                          <p className="text-sm font-semibold text-slate-900">{lead.name}</p>
+                          <div className="flex items-start justify-between gap-1.5">
+                            <p className="text-sm font-semibold text-slate-900">{lead.name}</p>
+                            {/* A client can sit in ANY column — a reopened deal
+                                is still a customer — so the badge lives on the
+                                card rather than being implied by the column. */}
+                            {lead.is_client && (
+                              <span
+                                title="Customer"
+                                aria-label="Customer"
+                                className="mt-0.5 inline-flex shrink-0 items-center rounded-full bg-emerald-50 p-0.5 text-emerald-700"
+                              >
+                                <BadgeCheck className="size-3.5" />
+                              </span>
+                            )}
+                          </div>
                           <div className="mt-1.5 flex items-center gap-2 text-xs">
                             {lead.source && (
                               <span className={cn("font-medium", sourceTone[lead.source] ?? "text-slate-500")}>

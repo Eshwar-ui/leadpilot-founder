@@ -1,6 +1,7 @@
 "use client";
 
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from "recharts";
+import { InfoTip } from "@/components/ui/InfoTip";
 
 // 5 dimensions, matching the rubric actually implemented in the backend
 // (config/score_dimensions.json: opening/discovery/pitch/objection_handling/
@@ -13,6 +14,23 @@ import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Responsi
 // this chart incomparable between the Detail page and the Comparison page's
 // side-by-side overlay, which is the whole point of the overlay.
 const AXIS_MAX = 20;
+
+// What each axis actually rates. Without these the chart is five words a
+// founder has to guess at — and "Discovery" and "Objection" in particular get
+// read as things about the LEAD rather than about how the telecaller handled
+// the call. Wording mirrors the rubric in config/score_dimensions.json.
+const SKILL_HELP: Record<string, string> = {
+  Opening:
+    "How the call started — did they introduce themselves and the company clearly, and give the customer a reason to keep listening in the first few seconds?",
+  Discovery:
+    "How well they asked questions and listened. Did they find out the customer's budget, timeline and real need, instead of pitching straight away?",
+  Pitch:
+    "How clearly they explained what's on offer and tied it to what the customer actually said they wanted — rather than reciting a generic script.",
+  Objection:
+    "How they handled pushback on price, timing or competitors. Did they answer the concern with something concrete, or dodge and repeat the pitch?",
+  Closing:
+    "How the call ended. Did they ask for a clear next step — a visit, a callback, a decision date — or let it finish with a vague 'think about it'?",
+};
 
 export function SkillRadar({
   skills,
@@ -50,10 +68,18 @@ export function SkillRadar({
           </RadarChart>
         </ResponsiveContainer>
       </div>
-      <ul className="mt-1 grid grid-cols-1 gap-x-4 gap-y-0.5 text-xs text-slate-600 sm:grid-cols-2">
+      <p className="mt-1 text-[11px] leading-snug text-slate-500">
+        How this telecaller handled their calls, averaged across every analysed call. Each skill is scored out of{" "}
+        {AXIS_MAX} by the AI — it rates their <span className="font-semibold">handling</span>, not the quality of the
+        leads they were given.
+      </p>
+      <ul className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-xs text-slate-600 sm:grid-cols-2">
         {data.map((d) => (
           <li key={d.skill} className="flex items-baseline justify-between gap-2">
-            <span>{d.skill}</span>
+            <span className="flex items-center gap-1">
+              {d.skill}
+              {SKILL_HELP[d.skill] && <InfoTip label={`What ${d.skill} measures`} text={SKILL_HELP[d.skill]} />}
+            </span>
             <span className="font-mono font-semibold text-slate-800">
               {d.value}/{AXIS_MAX}
             </span>

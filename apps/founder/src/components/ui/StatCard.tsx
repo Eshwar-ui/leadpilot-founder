@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { InfoTip } from "@/components/ui/InfoTip";
 import type { LucideIcon } from "lucide-react";
 
 export function StatCard({
@@ -12,6 +13,8 @@ export function StatCard({
   icon: Icon,
   tone = "default",
   className,
+  help,
+  hint,
 }: {
   label: string;
   value: React.ReactNode;
@@ -23,6 +26,13 @@ export function StatCard({
   icon?: LucideIcon;
   tone?: "default" | "danger";
   className?: string;
+  /** Plain-words explanation of what this number is and how it's worked out,
+   *  shown behind a "?" next to the label. A KPI nobody can define is a KPI
+   *  nobody trusts. */
+  help?: string;
+  /** One short line under the value, for the same purpose as `help` but always
+   *  visible — use it for the metric's unit or basis ("of calls attempted"). */
+  hint?: string;
 }) {
   return (
     <div
@@ -32,11 +42,12 @@ export function StatCard({
         className
       )}
     >
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          {label}
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <span className="truncate">{label}</span>
+          {help && <InfoTip label={`What ${label} means`} text={help} />}
         </span>
-        {Icon && <Icon className="size-4 text-slate-300" />}
+        {Icon && <Icon className="size-4 shrink-0 text-slate-300" />}
       </div>
       <div className="mt-2 flex items-baseline gap-1">
         <span
@@ -51,6 +62,7 @@ export function StatCard({
           <span className="text-xs font-medium text-slate-400">{suffix}</span>
         )}
       </div>
+      {hint && <p className="mt-0.5 text-[11px] leading-snug text-slate-400">{hint}</p>}
       {delta && (
         <p
           className={cn(

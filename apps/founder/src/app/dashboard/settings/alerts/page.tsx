@@ -19,6 +19,7 @@ const ALERT_DEFAULTS = {
   quality_floor: 40,
   break_threshold_min: 15,
   inactive_threshold_min: 45,
+  recall_days: 90,
 };
 
 const ALERT_FIELDS: { key: keyof typeof ALERT_DEFAULTS; label: string; hint: string; min: number; max: number; usedIn: string }[] = [
@@ -70,6 +71,14 @@ const ALERT_FIELDS: { key: keyof typeof ALERT_DEFAULTS; label: string; hint: str
     max: 480,
     usedIn: "The Team Health board and Telecaller Detail's live status",
   },
+  {
+    key: "recall_days",
+    label: "Client Recall Window (Days)",
+    hint: "A client who hasn't visited in this long shows as due for recall. Hair and skin treatment cycles differ a lot, so tune this to what you actually offer.",
+    min: 7,
+    max: 730,
+    usedIn: "The Clients page's “Due for recall” filter and count",
+  },
 ];
 
 const EMPTY_CONFIG: AlertConfig = {
@@ -79,6 +88,7 @@ const EMPTY_CONFIG: AlertConfig = {
   quality_floor: null,
   break_threshold_min: null,
   inactive_threshold_min: null,
+  recall_days: null,
 };
 
 /** Fixed key order so JSON.stringify is a reliable dirty check. */
@@ -162,14 +172,9 @@ export default function AlertConfigPage() {
   function updateField(key: keyof typeof ALERT_DEFAULTS, value: number | null) {
     setProfile((prev) => {
       if (!prev) return prev;
-      const current = prev.alert_config ?? {
-        wastage_days: null,
-        zombie_days: null,
-        performance_gap: null,
-        quality_floor: null,
-        break_threshold_min: null,
-        inactive_threshold_min: null,
-      };
+      // EMPTY_CONFIG rather than an inline literal, so adding a threshold
+      // means touching one place instead of two that silently drift apart.
+      const current = prev.alert_config ?? EMPTY_CONFIG;
       return { ...prev, alert_config: { ...current, [key]: value } };
     });
     setSaved(false);

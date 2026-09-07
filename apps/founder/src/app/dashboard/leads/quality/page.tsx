@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
@@ -94,6 +96,17 @@ export default function LeadQualityPage() {
 
   return (
     <div className="pb-10">
+      {/* Reached from All Leads, so it needs a way back. A real Link, not
+          router.back(): a shared URL or a new tab has no history to pop. */}
+      <div className="px-4 pt-6 sm:px-6 lg:px-8">
+        <Link
+          href="/dashboard/leads"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-primary-600"
+        >
+          <ArrowLeft className="size-3.5" /> All Leads
+        </Link>
+      </div>
+
       <PageHeader title="Lead Quality" description="Which enquiries are worth calling, and which sources send them" />
 
       {qualityError && (
@@ -113,6 +126,7 @@ export default function LeadQualityPage() {
             a confident zero reads as a fact about the business, not an outage. */}
         <StatCard
           label="Average Lead Score"
+          help="The average AI score (0-100) across every contact who has had at least one analysed call. It answers 'how good is the lead flow overall?' — leads with no analysed call aren't counted at all, rather than counted as zero."
           value={
             qualityLoading ? (
               <Skeleton className="h-6 w-12" />
@@ -126,6 +140,7 @@ export default function LeadQualityPage() {
         />
         <StatCard
           label="Hot Verdicts"
+          help="How many contacts the AI judged 'Hot' on their most recent call. It's a verdict about the conversation, not the deal — so it includes leads that have since closed, been lost, or been marked junk."
           value={
             qualityLoading ? (
               <Skeleton className="h-6 w-12" />
@@ -145,6 +160,7 @@ export default function LeadQualityPage() {
         />
         <StatCard
           label="Junk Rate"
+          help="The share of analysed contacts whose latest AI verdict was 'Junk' — wrong numbers, no real conversation, nothing to sell. High junk usually points at a lead source problem, not a telecaller one."
           value={qualityLoading ? <Skeleton className="h-6 w-12" /> : qualityError ? "—" : `${junkRate}%`}
           // Denominator is analysed contacts, not leads — labelling it "leads"
           // made this visibly contradict the lead count on All Leads.
@@ -156,6 +172,7 @@ export default function LeadQualityPage() {
         />
         <StatCard
           label="Best Source"
+          help={`The lead source with the highest share of Hot or Warm verdicts. Sources with fewer than ${MIN_SOURCE_VOLUME} leads are excluded, so a single lucky walk-in can't outrank a channel with hundreds.`}
           value={
             qualityLoading ? <Skeleton className="h-6 w-12" /> : qualityError ? "—" : bestSource ? bestSource.source : "—"
           }

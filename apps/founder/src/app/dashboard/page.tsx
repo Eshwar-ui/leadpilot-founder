@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Filter, Layers, Trophy, Activity, Download, CheckCircle2, FileText } from "lucide-react";
+import { Filter, Layers, Trophy, Activity, Download, CheckCircle2, FileText, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
 import { AlertBanner } from "@/components/ui/AlertBanner";
@@ -61,6 +61,21 @@ const teamStatusBorder: Record<string, string> = {
 // own ACTIVE_QUEUE_STAGES (app/api/dashboard.py) so "In progress" here can
 // never disagree with what the live-activity idle check considers "active".
 const ACTIVE_STAGES = ["New", "Assigned", "Contacted", "Interested", "Proposal Sent", "Negotiation"];
+
+// The stages worth putting in front of a founder who has no revenue yet this
+// month: leads that are alive and workable RIGHT NOW. Proposal Sent and
+// Negotiation are deliberately excluded — they're already in flight and
+// waiting on the other side, so they aren't the ones that need picking up.
+const LIVE_STAGES = ["New", "Assigned", "Contacted", "Interested"];
+
+const LIVE_LEAD_LIMIT = 10;
+
+const liveStagePill: Record<string, string> = {
+  New: "bg-blue-50 text-blue-700",
+  Assigned: "bg-slate-100 text-slate-600",
+  Contacted: "bg-slate-100 text-slate-600",
+  Interested: "bg-emerald-50 text-emerald-700",
+};
 
 const REVENUE_RANGES = [1, 7, 30, 90] as const;
 const RANGE_LABEL: Record<number, string> = { 1: "1D", 7: "7D", 30: "30D", 90: "90D" };
@@ -269,6 +284,28 @@ export default function DashboardPage() {
   const stageCounts = board ? groupByStage(board) : null;
   const inProgress = stageCounts ? ACTIVE_STAGES.reduce((s, stage) => s + (stageCounts[stage] ?? 0), 0) : null;
   const maxStageCount = stageCounts ? Math.max(1, ...Object.values(stageCounts)) : 1;
+
+  // "No revenue yet this month" is a claim about the org's numbers, so it is
+  // only ever made off a revenue fetch that actually SUCCEEDED. On a failed
+  // fetch `revenue` is null and mtd_total is unknown — reordering the whole
+  // dashboard then would tell the founder they've sold nothing at the one
+  // moment the app cannot know that. Same reasoning as `statValue` above.
+  const noRevenueThisMonth =
+    !revenueLoading && !revenueError && revenue != null && revenue.mtd_total === 0;
+
+  // Freshest workable leads first: everything still in a live stage, New
+  // before the rest, then most-recently-touched. Built from the board data
+  // the page already fetches — no extra request.
+  const liveLeads = board
+    ? [...board]
+        .filter((l) => LIVE_STAGES.includes(l.pipeline_stage))
+        .sort((a, b) => {
+          const aNew = a.pipeline_stage === "New" ? 0 : 1;
+          const bNew = b.pipeline_stage === "New" ? 0 : 1;
+          if (aNew !== bNew) return aNew - bNew;
+          return a.days_stuck - b.days_stuck;
+        })
+    : null;
   const activeTelecallers = teamStatus.filter((t) => t.status === "Active").length;
   const teamCalls = teamStatus.reduce((sum, t) => sum + t.calls, 0);
   const teamConnectRate = teamCalls ? Math.round((teamStatus.reduce((sum, t) => sum + t.connected, 0) / teamCalls) * 100) : 0;
@@ -417,6 +454,110 @@ export default function DashboardPage() {
           icon={Trophy}
         />
       </div>
+
+      {/* No revenue booked this month yet — the useful thing to show a founder
+          is not an empty chart, it's the leads they can still act on. The
+          revenue card keeps its place below, just demoted for now. */}
+      {noRevenueThisMonth && (
+        <div className="mt-6 px-4 sm:px-6 lg:px-8">
+          <Card>
+            <div className="flex flex-wrap items-start justify-between gap-3 p-5 pb-3">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <Sparkles className="size-4 text-primary-600" /> Live &amp; New Leads
+                </h3>
+                <p className="mt-1 text-xs text-slate-600">
+                  No revenue booked this month yet — these are the leads still open and worth working.
+                </p>
+              </div>
+              <Link href="/dashboard/leads?stage=New" className="text-xs font-semibold text-primary-600 hover:underline">
+                VIEW ALL
+              </Link>
+            </div>
+
+            {boardLoading ? (
+              <div className="flex flex-col gap-2 px-5 pb-5">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} block className="h-10 w-full" />
+                ))}
+              </div>
+            ) : boardError || !liveLeads ? (
+              <p role="alert" className="px-5 pb-6 text-center text-xs text-red-600">
+                {boardError ?? "Couldn't load your leads"} —{" "}
+                <button className="font-semibold underline" onClick={loadBoard}>
+                  Retry
+                </button>
+              </p>
+            ) : liveLeads.length === 0 ? (
+              <p className="px-5 pb-6 text-center text-sm text-slate-600">
+                No open leads right now.{" "}
+                <Link href="/dashboard/leads" className="font-semibold text-primary-600 underline">
+                  Add one
+                </Link>{" "}
+                to get the pipeline moving.
+              </p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        <th className="px-5 py-2.5">Lead</th>
+                        <th className="px-3 py-2.5">Stage</th>
+                        <th className="px-3 py-2.5">Source</th>
+                        <th className="px-3 py-2.5">Owner</th>
+                        <th className="px-5 py-2.5">Last Update</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {liveLeads.slice(0, LIVE_LEAD_LIMIT).map((l) => (
+                        <tr
+                          key={l.id}
+                          onClick={() => router.push(`/dashboard/leads/detail?id=${l.id}`)}
+                          className="cursor-pointer hover:bg-slate-50"
+                        >
+                          <td className="px-5 py-3">
+                            <Link
+                              href={`/dashboard/leads/detail?id=${l.id}`}
+                              className="block font-medium text-slate-900 hover:text-primary-600"
+                            >
+                              {l.name}
+                            </Link>
+                            {l.phone && <span className="block text-xs text-slate-600">{l.phone}</span>}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-xs font-medium",
+                                liveStagePill[l.pipeline_stage] ?? "bg-slate-100 text-slate-600"
+                              )}
+                            >
+                              {l.pipeline_stage}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-slate-500">{l.source || "\u2014"}</td>
+                          <td className="px-3 py-3 text-slate-500">{l.telecaller_name || "Unassigned"}</td>
+                          <td className="px-5 py-3 font-mono text-xs text-slate-600">
+                            {l.days_stuck === 0 ? "Today" : `${l.days_stuck}d ago`}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {liveLeads.length > LIVE_LEAD_LIMIT && (
+                  <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-600">
+                    Showing the {LIVE_LEAD_LIMIT} freshest of {liveLeads.length} open leads —{" "}
+                    <Link href="/dashboard/leads" className="font-semibold text-primary-600 underline">
+                      see them all
+                    </Link>
+                  </div>
+                )}
+              </>
+            )}
+          </Card>
+        </div>
+      )}
 
       <div className="mt-6 grid grid-cols-1 gap-4 px-4 sm:px-6 lg:px-8 lg:grid-cols-3">
         <Card className="lg:col-span-2">

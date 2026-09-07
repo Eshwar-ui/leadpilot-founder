@@ -260,10 +260,10 @@ export function ResetPasswordModal({
   );
 }
 
-/// Edit flow (role + active/inactive) — shared by the Telecaller Detail page
-/// and the Performance Matrix page, both of which only ever had read-only
-/// telecaller data on-screen and required a detour to Settings > Users to
-/// change anything.
+/// Edit flow (details + role + active/inactive) — shared by the Telecaller
+/// Detail page and the Performance Matrix page, both of which only ever had
+/// read-only telecaller data on-screen and required a detour to Settings >
+/// Users to change anything.
 export function EditTelecallerModal({
   open,
   member,
@@ -275,6 +275,9 @@ export function EditTelecallerModal({
   onClose: () => void;
   onSaved: (updated: TeamMember) => void;
 }) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [role, setRole] = useState<string>("telecaller");
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -282,17 +285,34 @@ export function EditTelecallerModal({
 
   useEffect(() => {
     if (!open || !member) return;
+    setName(member.name);
+    setEmail(member.email);
+    setPhone(member.phone ?? "");
     setRole(member.role);
     setActive(member.status === "Active");
     setError(null);
   }, [open, member]);
+
+  // The member's email is how they sign in (see the login screen), so moving
+  // it moves their account. Surfaced before saving rather than after, because
+  // a founder who didn't realise that will be the one fielding the "I can't
+  // log in" call.
+  const emailChanged = !!member && email.trim().toLowerCase() !== member.email.toLowerCase();
 
   async function submit() {
     if (!member) return;
     setSaving(true);
     setError(null);
     try {
-      const updated = await teamApi.update(member.id, { role, is_active: active });
+      const updated = await teamApi.update(member.id, {
+        name: name.trim(),
+        email: email.trim(),
+        // "" is meaningful here — it clears a number typed onto the wrong
+        // account — so it's sent as-is rather than collapsed to undefined.
+        phone: phone.trim(),
+        role,
+        is_active: active,
+      });
       onSaved(updated);
       onClose();
     } catch (e) {
@@ -312,7 +332,7 @@ export function EditTelecallerModal({
           <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button size="sm" onClick={submit} disabled={saving}>
+          <Button size="sm" onClick={submit} disabled={saving || !name.trim() || !email.trim()}>
             {saving ? "Saving…" : "Save Changes"}
           </Button>
         </>
@@ -321,8 +341,54 @@ export function EditTelecallerModal({
       <div className="flex flex-col gap-4">
         {error && <p className="rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
         <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Role</label>
-          <select value={role} onChange={(e) => setRole(e.target.value)} className="input">
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="edit-member-name">
+            Full Name
+          </label>
+          <input
+            id="edit-member-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Priya Menon"
+            className="input"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="edit-member-email">
+            Work Email
+          </label>
+          <input
+            id="edit-member-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@yourclinic.in"
+            className="input"
+          />
+          {emailChanged && (
+            <p className="mt-1.5 rounded-md border border-amber-100 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+              This is how {member?.name}{" "}
+              signs in. They&apos;ll need to use the new address from their next login — their password stays the same.
+            </p>
+          )}
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="edit-member-phone">
+            Phone
+          </label>
+          <input
+            id="edit-member-phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+91"
+            className="input"
+          />
+          <p className="mt-1 text-xs text-slate-500">Leave blank to remove the stored number.</p>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="edit-member-role">
+            Role
+          </label>
+          <select id="edit-member-role" value={role} onChange={(e) => setRole(e.target.value)} className="input">
             {ROLES.map((r) => (
               <option key={r} value={r}>{ROLE_LABEL[r]}</option>
             ))}

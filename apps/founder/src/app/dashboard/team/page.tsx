@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BellRing, UserPlus } from "lucide-react";
+import { BellRing, Pencil, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { StatCard } from "@/components/ui/StatCard";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { SkeletonStatCard, SkeletonTableRow } from "@/components/ui/Skeleton";
-import { ResetPasswordModal, SecretValue } from "@/components/team/TeamMemberModals";
+import { EditTelecallerModal, ResetPasswordModal, SecretValue } from "@/components/team/TeamMemberModals";
 import { ApiError, teamApi, type TeamMember } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +69,7 @@ export default function ManageTeamPage() {
   const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   const [resetMember, setResetMember] = useState<TeamMember | null>(null);
+  const [editMember, setEditMember] = useState<TeamMember | null>(null);
 
   const [notifyMember, setNotifyMember] = useState<TeamMember | null>(null);
   const [notifyTitle, setNotifyTitle] = useState("Message from your founder");
@@ -306,6 +307,12 @@ export default function ManageTeamPage() {
                             </button>
                           )}
                           <button
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:underline"
+                            onClick={() => setEditMember(m)}
+                          >
+                            <Pencil className="size-3.5" /> Edit
+                          </button>
+                          <button
                             className="text-xs font-semibold text-primary-600 hover:underline"
                             onClick={() => setResetMember(m)}
                           >
@@ -470,6 +477,13 @@ export default function ManageTeamPage() {
           </div>
         )}
       </Modal>
+
+      <EditTelecallerModal
+        open={editMember !== null}
+        member={editMember}
+        onClose={() => setEditMember(null)}
+        onSaved={(updated) => setMembers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))}
+      />
 
       <ResetPasswordModal
         open={resetMember !== null}

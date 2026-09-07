@@ -2,13 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, BarChart3, Inbox, Settings, FileText, Bell, ShieldCheck, X } from "lucide-react";
+import { LayoutGrid, BarChart3, BadgeCheck, Inbox, Settings, FileText, Bell, ShieldCheck, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Intentionally one link per group — Attendance, Coaching, Comparison, Manage
-// Team, Pipeline Board, Lead Quality, Budget Wastage, Zombie Leads, and
+// Intentionally near-one link per group — Attendance, Coaching, Comparison,
+// Manage Team, Pipeline Board, Lead Quality, Budget Wastage, Zombie Leads, and
 // Insight Feed are all built and live, just not linked from here. They stay
 // reachable by URL; this list is the deliberately short version.
+//
+// Clients is the exception under Leads: it's a primary surface of its own
+// (who is actually a customer, as opposed to where a deal sits in the
+// pipeline) and there is no other entry point to it.
 const NAV = [
   {
     label: "Overview",
@@ -20,7 +24,10 @@ const NAV = [
   },
   {
     label: "Leads",
-    items: [{ label: "All Leads", href: "/dashboard/leads", icon: Inbox }],
+    items: [
+      { label: "All Leads", href: "/dashboard/leads", icon: Inbox },
+      { label: "Clients", href: "/dashboard/clients", icon: BadgeCheck },
+    ],
   },
   {
     label: "AI insights",

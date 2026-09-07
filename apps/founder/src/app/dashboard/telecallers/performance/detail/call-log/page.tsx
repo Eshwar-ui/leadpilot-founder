@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, PlayCircle } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -25,6 +25,7 @@ function toISO(d: Date) {
 }
 
 function CallLogContent() {
+  const router = useRouter();
   const params = useSearchParams();
   const id = params.get("id") ?? "";
   const name = params.get("name");
@@ -142,24 +143,59 @@ function CallLogContent() {
             <p className="px-5 py-6 text-sm text-slate-600">No calls in this range.</p>
           ) : (
             <>
-              <div className="mt-3 divide-y divide-slate-100">
-                {calls.map((c) => (
-                  <Link
-                    key={c.call_id}
-                    href={`/dashboard/calls/detail?id=${c.call_id}`}
-                    className="flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-slate-50"
-                  >
-                    <span className="font-mono text-xs text-slate-600">{fmtDateTime(c.timestamp)}</span>
-                    <span className="flex items-center gap-2">
-                      {c.total_score != null && (
-                        <span className="font-mono text-xs font-semibold text-slate-600">{c.total_score}</span>
-                      )}
-                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", VERDICT_TONE[c.lead_verdict ?? ""] ?? "bg-slate-100 text-slate-600")}>
-                        {c.lead_verdict ?? "Unscored"}
-                      </span>
-                    </span>
-                  </Link>
-                ))}
+              {/* Same columns as the Telecaller Detail page's tabs — arriving
+                  here via "View full call log" shouldn't lose the lead name,
+                  number and duration the founder was just reading. */}
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      <th className="px-5 py-2.5">Lead</th>
+                      <th className="px-3 py-2.5">Date &amp; time</th>
+                      <th className="px-3 py-2.5">Duration</th>
+                      <th className="px-3 py-2.5">Verdict</th>
+                      <th className="px-5 py-2.5 text-right">Score</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {calls.map((c) => (
+                      <tr
+                        key={c.call_id}
+                        onClick={() => router.push(`/dashboard/calls/detail?id=${c.call_id}`)}
+                        className="cursor-pointer hover:bg-slate-50"
+                      >
+                        <td className="px-5 py-3">
+                          <span className="flex items-center gap-1.5 font-medium text-slate-900">
+                            {c.lead_name}
+                            {c.has_audio && (
+                              <PlayCircle className="size-3.5 text-emerald-600" aria-label="Recording available" />
+                            )}
+                          </span>
+                          {c.phone && <span className="block font-mono text-xs text-slate-600">{c.phone}</span>}
+                        </td>
+                        <td className="px-3 py-3 font-mono text-xs text-slate-600">{fmtDateTime(c.timestamp)}</td>
+                        <td className="px-3 py-3 font-mono text-xs text-slate-600">{c.duration_label ?? "—"}</td>
+                        <td className="px-3 py-3">
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-xs font-medium",
+                              VERDICT_TONE[c.lead_verdict ?? ""] ?? "bg-slate-100 text-slate-600"
+                            )}
+                          >
+                            {c.lead_verdict ?? "Unscored"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          {c.total_score == null ? (
+                            <span className="text-xs text-slate-400">Not scored</span>
+                          ) : (
+                            <span className="font-mono font-bold text-slate-700">{c.total_score}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
               {calls.length < total && (
                 <div className="flex justify-center border-t border-slate-100 p-4">

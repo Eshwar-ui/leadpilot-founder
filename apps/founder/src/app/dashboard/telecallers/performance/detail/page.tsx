@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { ArrowLeft, KeyRound, Pencil } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, KeyRound, Pencil, PlayCircle } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
+import { InfoTip } from "@/components/ui/InfoTip";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { SkillRadar } from "@/components/charts/SkillRadar";
@@ -21,15 +22,52 @@ import { EditTelecallerModal, ResetPasswordModal, ROLE_LABEL } from "@/component
 import { ApiError, teamApi, telecallersApi, type TeamMember, type TelecallerPerformanceDetail } from "@/lib/api";
 import { cn, formatINR, formatSeconds, initials, TELECALLER_STATUS_DOT, TELECALLER_STATUS_PILL, VERDICT_TONE } from "@/lib/utils";
 
-// Same thresholds the backend's status/idle logic runs on (see
-// _BREAK_THRESHOLD_MIN / _INACTIVE_THRESHOLD_MIN in app/api/dashboard.py) —
-// shown here so the "Idle Time" KPI's note stays true to the actual rule
-// instead of a hardcoded number that can drift from it.
-const BREAK_THRESHOLD_MIN = 15;
+// The three call lists are tabs over one dataset, not three datasets. Each
+// carries its own explanation because "Needs Review" in particular is easy to
+// misread as "the lead is bad" when it's actually about the TELECALLER's
+// handling of the call.
+const CALL_TABS = [
+  {
+    key: "all" as const,
+    label: "All Calls",
+    help: "Every call this telecaller made, newest first. Calls still waiting on AI analysis show as 'Not scored' rather than being hidden.",
+  },
+  {
+    key: "best" as const,
+    label: "Best Calls",
+    help: "Their five highest-scoring calls. The score rates how the TELECALLER handled the conversation — opening, discovery, pitch, objections, closing — not how good the lead was.",
+  },
+  {
+    key: "review" as const,
+    label: "Needs Review",
+    help: "Their five lowest-scoring calls — the ones worth listening back to for coaching. A low score is about the handling of the call, not a verdict on the lead.",
+  },
+];
 
-// The inline Call Log card is a preview, not the full history — "View all"
-// goes to a dedicated, paginated, date-filterable page for the rest.
-const CALL_LOG_PREVIEW_COUNT = 6;
+type CallTabKey = (typeof CALL_TABS)[number]["key"];
+
+function callRowsFor(tab: CallTabKey, detail: TelecallerPerformanceDetail) {
+  switch (tab) {
+    case "best":
+      return detail.best_calls;
+    case "review":
+      return detail.needs_review;
+    default:
+      return detail.timeline;
+  }
+}
+
+function emptyCallMessage(tab: CallTabKey) {
+  // Best/Needs Review rank on the AI's agent debrief, so they're empty until
+  // something has actually been scored — a different situation from "no calls".
+  return tab === "all" ? "No calls yet." : "No scored calls yet.";
+}
+
+// The All Calls tab is a preview, not the full history. Ten rows is about
+// what fits without the section swallowing the page; "Show more" reveals the
+// rest of what the backend sent (it caps `timeline` at 20), and "View full
+// call log" goes to the paginated, date-filterable page for everything older.
+const CALL_ROWS_VISIBLE = 10;
 
 // NULLABLE: a call keeps its timestamp only once the recording has been
 // ingested, so a just-uploaded call arrives here with none — `new Date(null)`
@@ -39,12 +77,21 @@ function fmtDateTime(iso: string | null) {
   return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+/** Date only — for "when was this lead added", where the time of day is noise. */
+function fmtDate(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 function fmtChartDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 }
 
 function TelecallerDetailContent() {
   const id = useSearchParams().get("id") ?? "";
+  const router = useRouter();
+  const [callTab, setCallTab] = useState<CallTabKey>("all");
+  const [callRowsExpanded, setCallRowsExpanded] = useState(false);
   const [detail, setDetail] = useState<TelecallerPerformanceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +129,8 @@ function TelecallerDetailContent() {
   // is today's count regardless of whatever range is applied elsewhere.
   const todaysCalls = detail?.daily_calls.length ? detail.daily_calls[detail.daily_calls.length - 1].count : 0;
   const newLeadsCount = detail?.leads_assigned.filter((l) => l.pipeline_stage === "New").length ?? 0;
+  const callRows = detail ? callRowsFor(callTab, detail) : [];
+  const visibleCallRows = callRowsExpanded ? callRows : callRows.slice(0, CALL_ROWS_VISIBLE);
 
   return (
     <div className="pb-10">
@@ -141,23 +190,26 @@ function TelecallerDetailContent() {
             </Card>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-4 px-4 sm:px-6 lg:px-8 lg:grid-cols-3">
-            <StatCard label="Calls" value={String(detail.calls)} />
-            <StatCard label="Today's Calls" value={String(todaysCalls)} />
-            <StatCard label="Connected" value={`${detail.connect_pct}%`} note="Of calls attempted" />
-            <StatCard label="New Leads" value={String(newLeadsCount)} note="Currently assigned" />
-            <StatCard label="Talk Time" value={formatSeconds(detail.talk_time_seconds)} />
+          {/* Three cards, not six. Connected sat at 100% for everyone (it only
+              asks whether a transcript exists) and Idle Time was blank off-shift,
+              so both cost a card to say nothing. Calls and Today's Calls answer
+              the same question at two ranges, so they share one card. */}
+          <div className="mt-4 grid grid-cols-1 gap-4 px-4 sm:px-6 lg:px-8 sm:grid-cols-3">
             <StatCard
-              label="Idle Time"
-              value={detail.idle_minutes != null ? `${detail.idle_minutes}m` : "—"}
-              note={
-                detail.idle_minutes == null
-                  ? "Not on shift"
-                  : detail.idle_minutes >= BREAK_THRESHOLD_MIN
-                  ? `Above the ${BREAK_THRESHOLD_MIN} min limit`
-                  : `Within the ${BREAK_THRESHOLD_MIN} min limit`
-              }
-              noteTone={detail.idle_minutes != null && detail.idle_minutes >= BREAK_THRESHOLD_MIN ? "warning" : "neutral"}
+              label="Calls"
+              value={String(detail.calls)}
+              suffix={`· ${todaysCalls} today`}
+              help="Total calls in the selected date range, with today's count beside it. Today's number is always today regardless of the range, so you can see whether they're working right now as well as how much they've done overall."
+            />
+            <StatCard
+              label="New Leads"
+              value={String(newLeadsCount)}
+              help="Leads currently assigned to them and still sitting at the 'New' stage — nobody has started working these yet. A number that keeps climbing means leads are arriving faster than they're being called."
+            />
+            <StatCard
+              label="Talk Time"
+              value={formatSeconds(detail.talk_time_seconds)}
+              help="Total time actually spent on the phone across the calls in this range, added up from each call's recorded length. Short talk time next to a high call count usually means calls aren't connecting."
             />
           </div>
 
@@ -201,69 +253,134 @@ function TelecallerDetailContent() {
             </Card>
           </div>
 
+          {/* Call Log, Best Calls and Needs Review were three separate cards
+              over the same set of calls, each showing a date and one number.
+              They're one section with tabs now, and every row carries who the
+              call was with, their number, how long it ran and what it scored —
+              so the founder can triage without opening each call. */}
           <div className="mt-4 px-4 sm:px-6 lg:px-8">
             <Card>
-              <div className="flex items-center justify-between gap-3 p-5 pb-0">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900">Call Log</h3>
-                  <p className="mt-0.5 text-xs text-slate-600">Most recent calls · click to open the AI analysis</p>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4">
+                <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="Calls">
+                  {CALL_TABS.map((t) => {
+                    const rows = callRowsFor(t.key, detail);
+                    const active = callTab === t.key;
+                    return (
+                      <button
+                        key={t.key}
+                        role="tab"
+                        aria-selected={active}
+                        onClick={() => {
+                          setCallTab(t.key);
+                          setCallRowsExpanded(false);
+                        }}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                          active ? "bg-primary-600 text-white" : "text-slate-600 hover:bg-slate-100"
+                        )}
+                      >
+                        {t.label}
+                        <span
+                          className={cn(
+                            "rounded-full px-1.5 font-mono text-[10px] font-bold",
+                            active ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                          )}
+                        >
+                          {rows.length}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <InfoTip
+                    className="ml-1"
+                    label="What these tabs mean"
+                    text={CALL_TABS.find((t) => t.key === callTab)?.help ?? ""}
+                  />
                 </div>
                 <Link
                   href={`/dashboard/telecallers/performance/detail/call-log?id=${id}&name=${encodeURIComponent(detail.name)}`}
                   className="shrink-0 text-xs font-semibold text-primary-600 hover:underline"
                 >
-                  View all →
+                  View full call log →
                 </Link>
               </div>
-              {detail.timeline.length === 0 ? (
-                <p className="px-5 py-6 text-sm text-slate-600">No calls yet.</p>
-              ) : (
-                <div className="mt-3 divide-y divide-slate-100">
-                  {detail.timeline.slice(0, CALL_LOG_PREVIEW_COUNT).map((c) => (
-                    <Link
-                      key={c.call_id}
-                      href={`/dashboard/calls/detail?id=${c.call_id}`}
-                      className="flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-slate-50"
-                    >
-                      <span className="font-mono text-xs text-slate-600">{fmtDateTime(c.timestamp)}</span>
-                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", VERDICT_TONE[c.lead_verdict ?? ""] ?? "bg-slate-100 text-slate-600")}>
-                        {c.lead_verdict ?? "Unscored"}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </Card>
-          </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 px-4 sm:px-6 lg:px-8 lg:grid-cols-2">
-            <Card className="p-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Best Calls</h3>
-              {detail.best_calls.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-600">No scored calls yet.</p>
+              {callRows.length === 0 ? (
+                <p className="px-5 py-8 text-center text-sm text-slate-600">{emptyCallMessage(callTab)}</p>
               ) : (
-                <div className="mt-3 flex flex-col gap-2">
-                  {detail.best_calls.map((c) => (
-                    <Link key={c.call_id} href={`/dashboard/calls/detail?id=${c.call_id}`} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm hover:bg-slate-50">
-                      <span className="text-slate-600">{fmtDateTime(c.timestamp)}</span>
-                      <span className="font-mono font-bold text-emerald-600">{c.total_score ?? "—"}</span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </Card>
-            <Card className="p-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Needs Review</h3>
-              {detail.needs_review.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-600">No scored calls yet.</p>
-              ) : (
-                <div className="mt-3 flex flex-col gap-2">
-                  {detail.needs_review.map((c) => (
-                    <Link key={c.call_id} href={`/dashboard/calls/detail?id=${c.call_id}`} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm hover:bg-slate-50">
-                      <span className="text-slate-600">{fmtDateTime(c.timestamp)}</span>
-                      <span className="font-mono font-bold text-amber-600">{c.total_score ?? "—"}</span>
-                    </Link>
-                  ))}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        <th className="px-5 py-2.5">Lead</th>
+                        <th className="px-3 py-2.5">Date &amp; time</th>
+                        <th className="px-3 py-2.5">Duration</th>
+                        <th className="px-3 py-2.5">Verdict</th>
+                        <th className="px-5 py-2.5 text-right">Score</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {visibleCallRows.map((c) => (
+                        <tr
+                          key={c.call_id}
+                          onClick={() => router.push(`/dashboard/calls/detail?id=${c.call_id}`)}
+                          className="cursor-pointer hover:bg-slate-50"
+                        >
+                          <td className="px-5 py-3">
+                            <span className="flex items-center gap-1.5 font-medium text-slate-900">
+                              {c.lead_name}
+                              {c.has_audio && (
+                                <PlayCircle className="size-3.5 text-emerald-600" aria-label="Recording available" />
+                              )}
+                            </span>
+                            {c.phone && <span className="block font-mono text-xs text-slate-600">{c.phone}</span>}
+                          </td>
+                          <td className="px-3 py-3 font-mono text-xs text-slate-600">{fmtDateTime(c.timestamp)}</td>
+                          <td className="px-3 py-3 font-mono text-xs text-slate-600">{c.duration_label ?? "—"}</td>
+                          <td className="px-3 py-3">
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-xs font-medium",
+                                VERDICT_TONE[c.lead_verdict ?? ""] ?? "bg-slate-100 text-slate-600"
+                              )}
+                            >
+                              {c.lead_verdict ?? "Unscored"}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            {c.total_score == null ? (
+                              <span className="text-xs text-slate-400">Not scored</span>
+                            ) : (
+                              <span
+                                className={cn(
+                                  "font-mono font-bold",
+                                  c.total_score >= 70
+                                    ? "text-emerald-600"
+                                    : c.total_score >= 40
+                                      ? "text-slate-700"
+                                      : "text-amber-600"
+                                )}
+                              >
+                                {c.total_score}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {callRows.length > CALL_ROWS_VISIBLE && (
+                    <div className="border-t border-slate-100 px-5 py-3 text-center">
+                      <button
+                        onClick={() => setCallRowsExpanded((v) => !v)}
+                        className="text-xs font-semibold text-primary-600 hover:underline"
+                      >
+                        {callRowsExpanded
+                          ? "Show fewer"
+                          : `Show all ${callRows.length} · ${callRows.length - CALL_ROWS_VISIBLE} more`}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </Card>
@@ -273,22 +390,72 @@ function TelecallerDetailContent() {
             <Card className="p-5">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Leads Assigned to {detail.name.split(" ")[0]} · {detail.leads_assigned.length}
+                <InfoTip
+                  className="ml-1.5"
+                  label="What Leads Assigned means"
+                  text="Open leads currently sitting with this telecaller — Closed Won, Closed Lost and Junk are excluded. Each row shows when it was last called, so you can spot leads going quiet."
+                />
               </h3>
               {detail.leads_assigned.length === 0 ? (
                 <p className="mt-3 text-sm text-slate-600">No open leads assigned.</p>
               ) : (
-                <div className="mt-3 flex flex-col gap-1.5">
+                <div className="mt-3 flex flex-col gap-2">
                   {detail.leads_assigned.map((l) => (
                     <Link
                       key={l.id}
                       href={`/dashboard/leads/detail?id=${l.id}`}
-                      className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50"
+                      className="rounded-lg border border-slate-100 px-3 py-2.5 hover:bg-slate-50"
                     >
-                      <span className="font-medium text-slate-800">{l.name}</span>
-                      <span className="flex items-center gap-3 text-xs text-slate-600">
-                        {l.pipeline_stage}
-                        {l.deal_value != null ? <span className="font-mono text-slate-600">{formatINR(l.deal_value)}</span> : null}
-                      </span>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="block text-sm font-medium text-slate-900">{l.name}</span>
+                          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600">
+                            {l.phone && <span className="font-mono">{l.phone}</span>}
+                            {l.source && <span>· {l.source}</span>}
+                            {l.created_at && <span>· Added {fmtDate(l.created_at)}</span>}
+                          </span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                            {l.pipeline_stage}
+                          </span>
+                          {l.deal_value != null && (
+                            <span className="font-mono text-xs font-semibold text-slate-700">{formatINR(l.deal_value)}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* "Has anyone actually called this lead?" is the whole
+                          reason this list is on a performance page. Silence is
+                          the finding, so a never-called lead says so loudly
+                          rather than showing an empty row. */}
+                      <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs">
+                        {l.last_call ? (
+                          <>
+                            <span className="text-slate-500">Last call</span>
+                            <span className="font-mono text-slate-700">{fmtDateTime(l.last_call.timestamp)}</span>
+                            {l.last_call.duration_label && (
+                              <span className="font-mono text-slate-500">· {l.last_call.duration_label}</span>
+                            )}
+                            <span
+                              className={cn(
+                                "rounded-full px-1.5 py-0.5 font-medium",
+                                VERDICT_TONE[l.last_call.lead_verdict ?? ""] ?? "bg-slate-100 text-slate-600"
+                              )}
+                            >
+                              {l.last_call.lead_verdict ?? "Unscored"}
+                            </span>
+                            {l.last_call.total_score != null && (
+                              <span className="font-mono text-slate-500">· {l.last_call.total_score}/110</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="font-medium text-amber-700">No calls yet</span>
+                        )}
+                        <span className="text-slate-400">
+                          · {l.days_stuck === 0 ? "updated today" : `${l.days_stuck}d since last update`}
+                        </span>
+                      </p>
                     </Link>
                   ))}
                 </div>
