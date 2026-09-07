@@ -287,7 +287,12 @@ export default function ManageTeamPage() {
                       <td className="px-3 py-3 text-right font-mono">{m.leads}</td>
                       <td className="px-3 py-3">
                         {m.quality === null ? (
-                          <span className="text-xs text-slate-600">No calls yet</span>
+                          // Null means no call of theirs has been SCORED — which
+                          // is not the same as having made no calls, and the
+                          // calls column right beside this one will say so.
+                          <span className="text-xs text-slate-600">
+                            {m.calls > 0 ? "Not scored yet" : "No calls yet"}
+                          </span>
                         ) : (
                           <div className="flex items-center gap-2">
                             <ProgressBar value={Math.round((m.quality / QUALITY_MAX) * 100)} tone="success" className="w-20" />

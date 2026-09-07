@@ -215,6 +215,16 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+/** Bookkeeping flags the API sends so the CLIENT can label a report — not
+ *  numbers a founder asked for. The shape-agnostic renderer below turns every
+ *  top-level scalar into a stat tile, which was putting a tile reading
+ *  "Ranged / No" next to real KPIs. */
+const INTERNAL_KEYS = new Set(["ranged"]);
+
+function isReportable([k]: [string, unknown]) {
+  return !INTERNAL_KEYS.has(k);
+}
+
 // Flattens a report's `data` into CSV text: a "Summary" block of top-level
 // scalar fields, then one table block per array-of-objects section — the
 // same two shapes ReportView already renders, just serialized instead of
@@ -227,7 +237,9 @@ function reportToCsv(data: unknown): string {
   };
 
   const blocks: string[] = [];
-  const scalarEntries = Object.entries(data).filter(([, v]) => !isPlainObject(v) && !Array.isArray(v));
+  const scalarEntries = Object.entries(data)
+    .filter(isReportable)
+    .filter(([, v]) => !isPlainObject(v) && !Array.isArray(v));
   if (scalarEntries.length > 0) {
     blocks.push(
       ["Summary", ...scalarEntries.map(([k, v]) => `${humanize(k)},${escape(v)}`)].join("\n")
@@ -308,7 +320,7 @@ function ReportView({ data, level = 0 }: { data: unknown; level?: number }) {
 
   const scalarEntries: [string, unknown][] = [];
   const complexEntries: [string, unknown][] = [];
-  for (const [k, v] of Object.entries(data)) {
+  for (const [k, v] of Object.entries(data).filter(isReportable)) {
     if (isPlainObject(v) || Array.isArray(v)) complexEntries.push([k, v]);
     else scalarEntries.push([k, v]);
   }

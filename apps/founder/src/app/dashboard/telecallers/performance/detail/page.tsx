@@ -207,9 +207,10 @@ function TelecallerDetailContent() {
               help="Leads currently assigned to them and still sitting at the 'New' stage — nobody has started working these yet. A number that keeps climbing means leads are arriving faster than they're being called."
             />
             <StatCard
-              label="Talk Time"
+              label="Avg Talk Time"
               value={formatSeconds(detail.talk_time_seconds)}
-              help="Total time actually spent on the phone across the calls in this range, added up from each call's recorded length. Short talk time next to a high call count usually means calls aren't connecting."
+              hint="per connected call"
+              help="How long their average connected call lasts, measured from the call's own transcript. This is a per-call average, not a running total — a short average next to a high call count usually means calls are ending before the pitch lands."
             />
           </div>
 

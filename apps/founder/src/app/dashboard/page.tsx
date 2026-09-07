@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Filter, Layers, Trophy, Activity, Download, CheckCircle2, FileText, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
+import { InfoTip } from "@/components/ui/InfoTip";
 import { AlertBanner } from "@/components/ui/AlertBanner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -563,15 +564,26 @@ export default function DashboardPage() {
         <Card className="lg:col-span-2">
           <div className="flex flex-col gap-4 p-5 pb-0 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                Revenue — {range === 1 ? "Today" : `${range} Days`}
+              {/* The range picker drives the CHART and Best Day only; the
+                  headline, Avg/Day and the working-day counts underneath are
+                  month-scoped and don't move with it. The header used to read
+                  "Revenue — 30 Days" above a month-to-date figure, so a founder
+                  on 90D saw one month's revenue sitting beside a best day that
+                  was larger than it — correct numbers, impossible-looking
+                  together. Each figure now says which period it covers. */}
+              <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Revenue
+                <InfoTip
+                  label="What Revenue means"
+                  text="The big number is this calendar month so far — every deal moved to Closed Won since the 1st, counted at its deal value. The 1D/7D/30D/90D buttons change the chart and Best Day underneath, not this figure, so on a 90-day view the best single day can be larger than the month total."
+                />
               </h3>
               <p className="mt-1 flex items-baseline gap-1 font-mono text-2xl font-bold text-primary-600">
                 {/* ₹0 above an error message is a lie the founder can act on —
                     "no revenue this month" and "we couldn't fetch it" are very
                     different facts. Same for Avg/Day and Best Day below. */}
                 {statValue(revenueLoading, !!revenueError, () => formatLakhs(revenue?.mtd_total ?? 0))}{" "}
-                <span className="text-sm font-medium text-slate-500">MTD</span>
+                <span className="text-sm font-medium text-slate-500">this month</span>
               </p>
               {revenueError ? null : revenue?.pct_change_vs_last_month != null ? (
                 <p
@@ -589,13 +601,15 @@ export default function DashboardPage() {
             </div>
             <div className="flex flex-wrap items-center gap-4 sm:gap-6 sm:text-right">
               <div>
-                <p className="text-[10px] font-semibold uppercase text-slate-600">Avg / Day</p>
+                <p className="text-[10px] font-semibold uppercase text-slate-600">Avg / Day · Month</p>
                 <p className="font-mono text-sm font-bold text-slate-900">
                   {statValue(revenueLoading, !!revenueError, () => formatLakhs(revenue?.avg_per_day ?? 0))}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] font-semibold uppercase text-slate-600">Best Day</p>
+                <p className="text-[10px] font-semibold uppercase text-slate-600">
+                  Best Day · {RANGE_LABEL[range]}
+                </p>
                 <p className="font-mono text-sm font-bold text-emerald-600">
                   {statValue(revenueLoading, !!revenueError, () => formatLakhs(revenue?.best_day?.revenue ?? 0))}
                 </p>

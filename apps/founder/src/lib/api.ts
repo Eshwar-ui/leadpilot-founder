@@ -939,7 +939,10 @@ export type TeamHealthEntry = {
   status: TeamHealthStatus;
   calls: number;
   connected: number;
+  /** All-time: every lead of theirs currently in Closed Won. */
   closed_won: number;
+  /** Just today — pairs with `revenue_today`, which comes off the same rows. */
+  closed_today: number;
   quality: number;
   trend: "up" | "down" | null;
   revenue_today: number;

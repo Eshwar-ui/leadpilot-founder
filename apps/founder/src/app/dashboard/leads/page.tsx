@@ -387,7 +387,9 @@ function AllLeadsContent() {
     <div className="pb-10">
       <PageHeader
         title="All Leads"
-        description={leads ? `${leads.length} leads in the pipeline` : undefined}
+        // inScope, not the raw pool: with clients hidden the header said 22
+        // while every other count on the page said 19.
+        description={leads ? `${inScope.length} leads in the pipeline` : undefined}
         action={
           <>
             <Link href="/dashboard/leads/archived">

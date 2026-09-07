@@ -90,7 +90,9 @@ export default function PerformanceMatrixPage() {
   const totals = useMemo(() => {
     const calls = telecallers.reduce((s, t) => s + t.calls, 0);
     const connected = telecallers.reduce((s, t) => s + t.connected, 0);
-    const closed = telecallers.reduce((s, t) => s + t.closed_won, 0);
+    // closed_today, not closed_won — the card says "today", and closed_won is
+    // every deal they have ever closed.
+    const closed = telecallers.reduce((s, t) => s + t.closed_today, 0);
     const revenue = telecallers.reduce((s, t) => s + t.revenue_today, 0);
     const needingNudge = telecallers.filter((t) => t.idle_minutes != null && t.idle_minutes >= NEEDS_NUDGE_MIN);
     return { calls, connected, closed, revenue, needingNudge };
@@ -130,6 +132,7 @@ export default function PerformanceMatrixPage() {
           label="Deals Closed Today"
           value={loading ? "—" : String(totals.closed)}
           note={loading ? undefined : `₹${formatINR(totals.revenue)}`}
+          help="Deals moved to Closed Won today, and what they were worth. The Closed column in the table below is each telecaller's all-time total, so the two will differ on any day the team hasn't closed anything."
         />
         <StatCard
           label="Needs a Nudge"
@@ -177,7 +180,7 @@ export default function PerformanceMatrixPage() {
                   <th className="px-3 py-2 text-right">Calls</th>
                   <th className="px-3 py-2 text-right">Leads</th>
                   <th className="px-3 py-2 text-right">Connected</th>
-                  <th className="px-3 py-2 text-right">Closed</th>
+                  <th className="px-3 py-2 text-right">Closed (all time)</th>
                   <th className="px-3 py-2 text-right">Quality</th>
                   <th className="px-5 py-2">Last Call</th>
                   {!compareOpen && <th className="px-5 py-2" />}
